@@ -98,6 +98,111 @@ export function getMoveFromTo(
 }
 
 /**
+ * Check if a move (in SAN notation) is legal in the position after a given move number.
+ * Returns true if the move is a legal reply at that point in the game.
+ */
+export function isLegalMoveAt(
+  pgn: string,
+  moveNumber: number,
+  playedMove: string,
+  candidateMove: string
+): boolean {
+  try {
+    const chess = new Chess();
+    chess.loadPgn(pgn);
+    const history = chess.history();
+
+    const replay = new Chess();
+
+    // Replay up to (but not including) the played move to get the position
+    // where the player was on the clock.
+    const whiteIndex = (moveNumber - 1) * 2;
+    const blackIndex = whiteIndex + 1;
+
+    let targetIndex: number;
+    if (history[whiteIndex] === playedMove) {
+      targetIndex = whiteIndex;
+    } else if (history[blackIndex] === playedMove) {
+      targetIndex = blackIndex;
+    } else {
+      // Can't locate the move in the game — can't validate
+      return false;
+    }
+
+    // Replay up to just before the played move
+    for (let i = 0; i < targetIndex && i < history.length; i++) {
+      replay.move(history[i]);
+    }
+
+    // Now try the candidate move in this position
+    const result = replay.move(candidateMove);
+    return result !== null;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Verify that a move actually appears in the game at the given move number.
+ */
+export function moveExistsInGame(
+  pgn: string,
+  moveNumber: number,
+  move: string
+): boolean {
+  try {
+    const chess = new Chess();
+    chess.loadPgn(pgn);
+    const history = chess.history();
+
+    const whiteIndex = (moveNumber - 1) * 2;
+    const blackIndex = whiteIndex + 1;
+
+    return history[whiteIndex] === move || history[blackIndex] === move;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get the FEN position just before a move is played (the position where the
+ * player had to make a decision).
+ */
+export function getFenBeforeMove(
+  pgn: string,
+  moveNumber: number,
+  move: string
+): string | null {
+  try {
+    const chess = new Chess();
+    chess.loadPgn(pgn);
+    const history = chess.history();
+
+    const replay = new Chess();
+
+    const whiteIndex = (moveNumber - 1) * 2;
+    const blackIndex = whiteIndex + 1;
+
+    let targetIndex: number;
+    if (history[whiteIndex] === move) {
+      targetIndex = whiteIndex;
+    } else if (history[blackIndex] === move) {
+      targetIndex = blackIndex;
+    } else {
+      return null;
+    }
+
+    for (let i = 0; i < targetIndex && i < history.length; i++) {
+      replay.move(history[i]);
+    }
+
+    return replay.fen();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Parse a FEN string into an 8x8 board array.
  * Returns array of 64 entries, row by row from rank 8 to rank 1.
  * Each entry is a piece character or null for empty squares.
