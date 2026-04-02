@@ -1,28 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { PlayerProfile } from "@/lib/types";
 import { PlayerCard } from "@/components/player-card";
 import { PlayerCardSkeleton } from "@/components/loading-skeleton";
+import { useRouter } from "next/navigation";
+import { ALLOWED_USERS } from "@/lib/chess-com";
 
 export default function Home() {
   const router = useRouter();
-  const [username, setUsername] = useState("");
   const [playerData, setPlayerData] = useState<PlayerProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSearch(e: React.FormEvent) {
-    e.preventDefault();
-    if (!username.trim()) return;
-
+  async function handleSelect(username: string) {
     setLoading(true);
     setError(null);
     setPlayerData(null);
 
     try {
-      const res = await fetch(`/api/player/${encodeURIComponent(username.trim())}`);
+      const res = await fetch(`/api/player/${encodeURIComponent(username)}`);
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "Player not found");
@@ -45,24 +42,18 @@ export default function Home() {
         </p>
       </div>
 
-      <form onSubmit={handleSearch} className="mb-6">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Chess.com username"
-            className="flex-1 rounded-lg bg-surface-card px-4 py-3 text-gray-200 placeholder-gray-500 outline-none ring-1 ring-gray-700 focus:ring-accent-blue"
-          />
+      <div className="mb-6 flex gap-3">
+        {ALLOWED_USERS.map((user) => (
           <button
-            type="submit"
-            disabled={loading || !username.trim()}
-            className="rounded-lg bg-accent-blue px-6 py-3 font-semibold text-white disabled:opacity-50"
+            key={user}
+            onClick={() => handleSelect(user)}
+            disabled={loading}
+            className="flex-1 rounded-lg bg-surface-card px-4 py-4 text-lg font-semibold text-gray-200 ring-1 ring-gray-700 transition hover:ring-accent-blue disabled:opacity-50"
           >
-            {loading ? "..." : "Search"}
+            {user}
           </button>
-        </div>
-      </form>
+        ))}
+      </div>
 
       {error && (
         <div className="mb-4 rounded-lg bg-red-900/30 px-4 py-3 text-accent-red">

@@ -1,6 +1,12 @@
 import { ChessComPlayer, ChessComStats, ChessComGame } from "./types";
 
 const CHESS_COM_API = "https://api.chess.com/pub";
+
+export const ALLOWED_USERS = ["castledoon", "exstrax"];
+
+export function isAllowedUser(username: string): boolean {
+  return ALLOWED_USERS.includes(username.toLowerCase());
+}
 const HEADERS = {
   "User-Agent": "ChessCoach/1.0 (github.com/chess-coach)",
   Accept: "application/json",

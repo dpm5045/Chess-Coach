@@ -1,11 +1,15 @@
 import { NextRequest } from "next/server";
-import { fetchPlayer, fetchStats } from "@/lib/chess-com";
+import { fetchPlayer, fetchStats, isAllowedUser } from "@/lib/chess-com";
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ username: string }> }
 ) {
   const { username } = await params;
+
+  if (!isAllowedUser(username)) {
+    return Response.json({ error: "Player not available" }, { status: 403 });
+  }
 
   try {
     const [profile, stats] = await Promise.all([

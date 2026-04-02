@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { fetchArchives, fetchGamesFromArchive } from "@/lib/chess-com";
+import { fetchArchives, fetchGamesFromArchive, isAllowedUser } from "@/lib/chess-com";
 import { ChessComGame } from "@/lib/types";
 
 const MAX_MONTHS = 3;
@@ -10,6 +10,10 @@ export async function GET(
   { params }: { params: Promise<{ username: string }> }
 ) {
   const { username } = await params;
+
+  if (!isAllowedUser(username)) {
+    return Response.json({ error: "Player not available" }, { status: 403 });
+  }
   const searchParams = request.nextUrl.searchParams;
   const months = Math.min(
     parseInt(searchParams.get("months") || String(MAX_MONTHS), 10),

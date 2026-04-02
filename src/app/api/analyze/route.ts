@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { analyzeGame } from "@/lib/claude";
+import { isAllowedUser } from "@/lib/chess-com";
 
 export async function POST(request: NextRequest) {
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -18,6 +19,10 @@ export async function POST(request: NextRequest) {
         { error: "Missing required fields: pgn, username, color" },
         { status: 400 }
       );
+    }
+
+    if (!isAllowedUser(username)) {
+      return Response.json({ error: "Player not available" }, { status: 403 });
     }
 
     const analysis = await analyzeGame(
