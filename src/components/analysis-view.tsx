@@ -1,5 +1,8 @@
+"use client";
+
+import { useState, useMemo } from "react";
 import { AnalysisResult, CriticalMoment } from "@/lib/types";
-import { getFenAtMove } from "@/lib/chess-utils";
+import { getAllMoves, MoveDetail } from "@/lib/chess-utils";
 import { ChessBoard } from "@/components/chess-board";
 
 function AssessmentBadge({ assessment }: { assessment: string }) {
@@ -34,6 +37,16 @@ function MomentTypeBadge({ type }: { type: CriticalMoment["type"] }) {
   );
 }
 
+function findCriticalMoment(
+  moments: CriticalMoment[],
+  moveNumber: number,
+  san: string
+): CriticalMoment | undefined {
+  return moments.find(
+    (m) => m.moveNumber === moveNumber && m.move === san
+  );
+}
+
 export function AnalysisView({
   analysis,
   pgn,
@@ -41,6 +54,23 @@ export function AnalysisView({
   analysis: AnalysisResult;
   pgn?: string;
 }) {
+  const [showAllMoves, setShowAllMoves] = useState(false);
+  const [expandedMove, setExpandedMove] = useState<number | null>(null);
+
+  const allMoves = useMemo(() => (pgn ? getAllMoves(pgn) : []), [pgn]);
+
+  const criticalMoveKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const m of analysis.criticalMoments) {
+      keys.add(`${m.moveNumber}-${m.move}`);
+    }
+    return keys;
+  }, [analysis.criticalMoments]);
+
+  const displayMoves: MoveDetail[] = showAllMoves
+    ? allMoves
+    : allMoves.filter((m) => criticalMoveKeys.has(`${m.moveNumber}-${m.san}`));
+
   return (
     <div className="space-y-4">
       {/* Summary */}
@@ -67,37 +97,105 @@ export function AnalysisView({
         <p className="mt-1 text-sm text-gray-400">{analysis.opening.comment}</p>
       </div>
 
-      {/* Critical Moments */}
+      {/* Moves */}
       <div className="rounded-xl bg-surface-card p-4">
-        <h3 className="mb-3 text-sm font-semibold text-gray-400">
-          CRITICAL MOMENTS
-        </h3>
-        <div className="space-y-4">
-          {analysis.criticalMoments.map((moment, i) => {
-            const fen = pgn
-              ? getFenAtMove(pgn, moment.moveNumber, moment.move)
-              : null;
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-400">
+            {showAllMoves ? "ALL MOVES" : "CRITICAL MOMENTS"}
+          </h3>
+          <div className="flex gap-1">
+            <button
+              onClick={() => setShowAllMoves(false)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                !showAllMoves
+                  ? "bg-accent-blue text-white"
+                  : "bg-surface-elevated text-gray-400"
+              }`}
+            >
+              Critical
+            </button>
+            <button
+              onClick={() => setShowAllMoves(true)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                showAllMoves
+                  ? "bg-accent-blue text-white"
+                  : "bg-surface-elevated text-gray-400"
+              }`}
+            >
+              All Moves
+            </button>
+          </div>
+        </div>
+        <div className="space-y-2">
+          {displayMoves.map((move, i) => {
+            const critical = findCriticalMoment(
+              analysis.criticalMoments,
+              move.moveNumber,
+              move.san
+            );
+            const isExpanded = expandedMove === i;
+            const colorLabel = move.color === "w" ? "White" : "Black";
+            const moveLabel = `${move.moveNumber}${move.color === "b" ? "..." : "."} ${move.san}`;
 
             return (
               <div key={i} className="space-y-2">
-                {fen && <ChessBoard fen={fen} />}
-                <div className="rounded-lg bg-surface-elevated px-3 py-3">
-                  <div className="mb-1 flex items-center justify-between">
+                <button
+                  onClick={() => setExpandedMove(isExpanded ? null : i)}
+                  className={`flex w-full items-center justify-between rounded-lg px-3 py-3 text-left transition-colors ${
+                    critical
+                      ? "bg-surface-elevated ring-1 ring-accent-yellow/30"
+                      : "bg-surface-elevated"
+                  } active:brightness-110`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`inline-block h-2.5 w-2.5 rounded-full ${
+                        move.color === "w"
+                          ? "border border-gray-400 bg-white"
+                          : "border border-gray-600 bg-gray-800"
+                      }`}
+                    />
                     <span className="font-mono text-sm font-bold">
-                      Move {moment.moveNumber}: {moment.move}
+                      {moveLabel}
                     </span>
-                    <MomentTypeBadge type={moment.type} />
+                    <span className="text-xs text-gray-500">
+                      {move.from}→{move.to}
+                    </span>
                   </div>
-                  <p className="text-sm text-gray-300">{moment.comment}</p>
-                  {moment.suggestion && (
-                    <p className="mt-1 text-sm text-accent-green">
-                      Better: {moment.suggestion}
-                    </p>
-                  )}
-                </div>
+                  <div className="flex items-center gap-2">
+                    {critical && <MomentTypeBadge type={critical.type} />}
+                    <span className="text-xs text-gray-500">
+                      {isExpanded ? "▲" : "▼"}
+                    </span>
+                  </div>
+                </button>
+
+                {isExpanded && (
+                  <div className="space-y-2 pb-2">
+                    <ChessBoard fen={move.fen} />
+                    {critical && (
+                      <div className="rounded-lg bg-surface px-3 py-2">
+                        <p className="text-sm text-gray-300">
+                          {critical.comment}
+                        </p>
+                        {critical.suggestion && (
+                          <p className="mt-1 text-sm text-accent-green">
+                            Better: {critical.suggestion}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
+
+          {displayMoves.length === 0 && (
+            <div className="py-4 text-center text-sm text-gray-500">
+              No moves to display.
+            </div>
+          )}
         </div>
       </div>
 
