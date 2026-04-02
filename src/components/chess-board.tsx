@@ -4,7 +4,7 @@ import { Chessboard } from "react-chessboard";
 
 export function ChessBoard({ fen }: { fen: string }) {
   return (
-    <div className="mx-auto w-full max-w-[280px]">
+    <div className="mx-auto w-full max-w-[280px] md:max-w-[420px]">
       <Chessboard
         options={{
           position: fen,

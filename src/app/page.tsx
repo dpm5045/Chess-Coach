@@ -37,7 +37,7 @@ export default function Home() {
   }
 
   return (
-    <div className="mx-auto max-w-lg px-4 pt-12">
+    <div className="mx-auto max-w-lg md:max-w-2xl px-4 pt-12">
       <div className="mb-8 text-center">
         <h1 className="text-3xl font-bold">&#9823; Chess Coach</h1>
         <p className="mt-2 text-gray-400">

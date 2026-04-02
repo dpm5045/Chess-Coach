@@ -47,7 +47,7 @@ export default function AnalysisPage() {
 
   if (!gameUrl) {
     return (
-      <div className="mx-auto max-w-lg px-4 pt-12 text-center">
+      <div className="mx-auto max-w-lg md:max-w-2xl px-4 pt-12 text-center">
         <p className="text-gray-400">No game selected.</p>
         <button
           onClick={() => router.push("/")}
@@ -61,7 +61,7 @@ export default function AnalysisPage() {
 
   if (!game) {
     return (
-      <div className="mx-auto max-w-lg px-4 pt-12 text-center">
+      <div className="mx-auto max-w-lg md:max-w-2xl px-4 pt-12 text-center">
         <p className="text-gray-400">
           Game data not available. Please select a game from the list.
         </p>
@@ -80,7 +80,7 @@ export default function AnalysisPage() {
   const color = getPlayerColor(game, username);
 
   return (
-    <div className="mx-auto max-w-lg px-4 pt-6">
+    <div className="mx-auto max-w-lg md:max-w-2xl px-4 pt-6">
       <button
         onClick={() => router.push(`/games/${encodeURIComponent(username)}`)}
         className="mb-4 min-h-[44px] flex items-center text-sm text-gray-400"
@@ -95,14 +95,14 @@ export default function AnalysisPage() {
             <span className="text-sm text-gray-400">
               Playing {color} vs
             </span>
-            <div className="text-lg font-bold">
+            <div className="text-lg md:text-xl font-bold">
               {opponent.username}{" "}
               <span className="text-sm text-gray-500">
                 ({opponent.rating})
               </span>
             </div>
           </div>
-          <div className={`text-xl font-bold ${outcomeColor(outcome)}`}>
+          <div className={`text-xl md:text-2xl font-bold ${outcomeColor(outcome)}`}>
             {outcomeLabel(outcome)}
           </div>
         </div>

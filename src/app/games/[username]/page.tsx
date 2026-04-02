@@ -51,7 +51,7 @@ export default function GamesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg px-4 pt-6">
+    <div className="mx-auto max-w-lg md:max-w-2xl px-4 pt-6">
       <button
         onClick={() => router.push("/")}
         className="mb-4 min-h-[44px] flex items-center text-sm text-gray-400"

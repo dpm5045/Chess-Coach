@@ -6,3 +6,10 @@ body {
   background-color: #0f1419;
   color: #e0e0e0;
 }
+
+/* Scale up text on tablets */
+@media (min-width: 768px) {
+  body {
+    font-size: 1.125rem;
+  }
+}

@@ -51,7 +51,7 @@ export function BottomNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-800 bg-surface">
-      <div className="mx-auto flex max-w-lg items-center justify-around py-2">
+      <div className="mx-auto flex max-w-lg md:max-w-2xl items-center justify-around py-2">
         {NAV_ITEMS.map((item) => {
           const active = isActive(item);
           return (
