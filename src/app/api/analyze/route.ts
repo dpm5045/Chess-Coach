@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { pgn, username, color, rating } = body;
+    const { pgn, username, color, rating, cacheOnly } = body;
 
     if (!pgn || !username || !color) {
       return Response.json(
@@ -30,6 +30,11 @@ export async function POST(request: NextRequest) {
     const cached = await getCachedAnalysis(pgn);
     if (cached) {
       return Response.json(cached);
+    }
+
+    // If cache-only mode, don't call Claude — just report the miss
+    if (cacheOnly) {
+      return Response.json(null, { status: 204 });
     }
 
     const analysis = await analyzeGame(

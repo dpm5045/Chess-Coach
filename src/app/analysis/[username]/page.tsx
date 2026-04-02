@@ -16,7 +16,7 @@ export default function AnalysisPage() {
   const gameUrl = searchParams.get("game") || "";
 
   const [game, setGame] = useState<ChessComGame | null>(null);
-  const { analysis, loading, error, fetchAnalysis } =
+  const { analysis, loading, error, checkCache, fetchAnalysis } =
     useCachedAnalysis(gameUrl);
 
   useEffect(() => {
@@ -36,14 +36,14 @@ export default function AnalysisPage() {
     setGame(null);
   }, [gameUrl]);
 
+  // Check server cache on load (free — just reads Redis), but do NOT
+  // auto-trigger a Claude API call. The user must click "Analyze" for that.
   useEffect(() => {
     if (game && !analysis && !loading) {
-      const color = getPlayerColor(game, username);
-      const rating = game[color].rating;
-      fetchAnalysis(game.pgn, username, color, rating);
+      checkCache(game.pgn);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game, analysis, loading, username]);
+  }, [game, analysis, loading]);
 
   if (!gameUrl) {
     return (
@@ -134,6 +134,26 @@ export default function AnalysisPage() {
           >
             Try again
           </button>
+        </div>
+      )}
+
+      {!analysis && !loading && !error && (
+        <div className="rounded-xl bg-surface-card p-6 text-center">
+          <p className="mb-4 text-gray-400">
+            No cached analysis for this game yet.
+          </p>
+          <button
+            onClick={() => {
+              const c = getPlayerColor(game, username);
+              fetchAnalysis(game.pgn, username, c, game[c].rating);
+            }}
+            className="rounded-lg bg-accent-blue px-6 py-3 text-lg font-semibold text-white"
+          >
+            Analyze Game
+          </button>
+          <p className="mt-3 text-xs text-gray-600">
+            Uses API credits. New games are batch-analyzed periodically at no cost.
+          </p>
         </div>
       )}
 
