@@ -137,7 +137,7 @@ export default function AnalysisPage() {
         </div>
       )}
 
-      {analysis && <AnalysisView analysis={analysis} pgn={game.pgn} />}
+      {analysis && <AnalysisView analysis={analysis} pgn={game.pgn} playerColor={color} />}
     </div>
   );
 }

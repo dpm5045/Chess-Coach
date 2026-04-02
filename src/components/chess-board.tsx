@@ -2,12 +2,13 @@
 
 import { Chessboard } from "react-chessboard";
 
-export function ChessBoard({ fen }: { fen: string }) {
+export function ChessBoard({ fen, orientation = "white" }: { fen: string; orientation?: "white" | "black" }) {
   return (
     <div className="mx-auto w-full max-w-[280px] md:max-w-[420px]">
       <Chessboard
         options={{
           position: fen,
+          boardOrientation: orientation,
           allowDragging: false,
           showNotation: true,
           showAnimations: false,

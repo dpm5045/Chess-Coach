@@ -50,9 +50,11 @@ function findCriticalMoment(
 export function AnalysisView({
   analysis,
   pgn,
+  playerColor,
 }: {
   analysis: AnalysisResult;
   pgn?: string;
+  playerColor?: "white" | "black";
 }) {
   const [showAllMoves, setShowAllMoves] = useState(false);
   const [expandedMove, setExpandedMove] = useState<number | null>(null);
@@ -172,7 +174,7 @@ export function AnalysisView({
 
                 {isExpanded && (
                   <div className="space-y-2 pb-2">
-                    <ChessBoard fen={move.fen} />
+                    <ChessBoard fen={move.fen} orientation={playerColor} />
                     {critical && (
                       <div className="rounded-lg bg-surface px-3 py-2">
                         <p className="text-sm text-gray-300">
