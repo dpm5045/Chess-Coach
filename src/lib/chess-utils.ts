@@ -98,6 +98,45 @@ export function getMoveFromTo(
 }
 
 /**
+ * Get all legal moves (in SAN notation) at the position just before a played move.
+ * Optionally exclude the played move itself from the results.
+ */
+export function getLegalMovesAt(
+  pgn: string,
+  moveNumber: number,
+  playedMove: string
+): string[] {
+  try {
+    const chess = new Chess();
+    chess.loadPgn(pgn);
+    const history = chess.history();
+
+    const replay = new Chess();
+
+    const whiteIndex = (moveNumber - 1) * 2;
+    const blackIndex = whiteIndex + 1;
+
+    let targetIndex: number;
+    if (history[whiteIndex] === playedMove) {
+      targetIndex = whiteIndex;
+    } else if (history[blackIndex] === playedMove) {
+      targetIndex = blackIndex;
+    } else {
+      return [];
+    }
+
+    for (let i = 0; i < targetIndex && i < history.length; i++) {
+      replay.move(history[i]);
+    }
+
+    // Return all legal moves except the one that was played
+    return replay.moves().filter((m) => m !== playedMove);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Check if a move (in SAN notation) is legal in the position after a given move number.
  * Returns true if the move is a legal reply at that point in the game.
  */
