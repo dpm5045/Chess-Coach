@@ -4,6 +4,7 @@ import {
   isLegalMoveAt,
   moveExistsInGame,
   getAllMoves,
+  getLegalMovesAt,
 } from "./chess-utils";
 
 const client = new Anthropic();
@@ -110,15 +111,30 @@ export async function analyzeGame(
       return moveExistsInGame(pgn, cm.moveNumber, cm.move);
     })
     .map((cm: CriticalMoment) => {
-      // Clear suggestions that aren't legal moves in the position
-      if (
+      const needsSuggestion =
+        cm.type === "blunder" || cm.type === "mistake" || cm.type === "missed_tactic";
+      const hasValidSuggestion =
         cm.suggestion &&
         cm.suggestion.length > 0 &&
-        !isLegalMoveAt(pgn, cm.moveNumber, cm.move, cm.suggestion)
-      ) {
+        isLegalMoveAt(pgn, cm.moveNumber, cm.move, cm.suggestion);
+
+      if (hasValidSuggestion) {
+        return cm;
+      }
+
+      if (!needsSuggestion) {
+        // For "excellent" moments, just clear any invalid suggestion
         return { ...cm, suggestion: "" };
       }
-      return cm;
+
+      // For blunders/mistakes/missed tactics: pick a fallback from legal moves.
+      // Prefer captures (contain "x") as they're typically tactical and relevant.
+      const legalMoves = getLegalMovesAt(pgn, cm.moveNumber, cm.move);
+      const captures = legalMoves.filter((m) => m.includes("x"));
+      const checks = legalMoves.filter((m) => m.includes("+"));
+      const fallback = captures[0] || checks[0] || legalMoves[0] || "";
+
+      return { ...cm, suggestion: fallback };
     });
 
   return result;
