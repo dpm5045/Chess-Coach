@@ -103,3 +103,31 @@ export interface CriticalMoment {
   comment: string;
   suggestion?: string;
 }
+
+// Meta analysis types
+
+export interface MetaTheme {
+  title: string;
+  sentiment: "strength" | "weakness" | "neutral";
+  frequency: "consistent" | "occasional" | "rare";
+  description: string;
+  examples: string[];
+  actionItem: string;
+}
+
+export interface MetaAnalysisResult {
+  playerUsername: string;
+  gamesAnalyzed: number;
+  timeRange: string;
+  overallProfile: string;
+  ratingTrend: string;
+  strengths: MetaTheme[];
+  weaknesses: MetaTheme[];
+  openingRepertoire: {
+    asWhite: string;
+    asBlack: string;
+    recommendation: string;
+  };
+  endgameTendency: string;
+  coachingPlan: string[];
+}

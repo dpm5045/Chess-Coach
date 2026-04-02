@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { AnalysisResult, CriticalMoment } from "./types";
+import { AnalysisResult, CriticalMoment, MetaAnalysisResult } from "./types";
 import {
   isLegalMoveAt,
   moveExistsInGame,
@@ -138,4 +138,78 @@ export async function analyzeGame(
     });
 
   return result;
+}
+
+// --- Meta Analysis ---
+
+const META_SYSTEM_PROMPT = `You are a long-term chess coach reviewing a student's body of work across many games. Your tone is warm and supportive — celebrate their strengths before addressing weaknesses. Frame improvements as the next step in their journey, not as failures.
+
+You will receive summaries or move lists from multiple games for one player. Identify recurring patterns across games — not one-off events. Look for consistent themes in openings, tactics, positional play, time management, and endgames.
+
+Respond with ONLY valid JSON (no markdown, no code fences, no text outside the JSON) matching this exact schema:
+
+{
+  "playerUsername": "string",
+  "gamesAnalyzed": number,
+  "timeRange": "string - e.g. Jan 2026 – Mar 2026",
+  "overallProfile": "string - 3-4 sentence player profile summarizing their style and level",
+  "ratingTrend": "string - observation about their rating trajectory and what it suggests",
+  "strengths": [
+    {
+      "title": "string - short name for this strength",
+      "sentiment": "strength",
+      "frequency": "consistent" | "occasional" | "rare",
+      "description": "string - 2-3 sentences explaining this pattern",
+      "examples": ["string - specific game reference, e.g. 'Game vs opponent (date): description'"],
+      "actionItem": "string - how to build on this strength"
+    }
+  ],
+  "weaknesses": [
+    {
+      "title": "string - short name for this weakness",
+      "sentiment": "weakness",
+      "frequency": "consistent" | "occasional" | "rare",
+      "description": "string - 2-3 sentences explaining this pattern",
+      "examples": ["string - specific game reference"],
+      "actionItem": "string - specific drill or focus to improve"
+    }
+  ],
+  "openingRepertoire": {
+    "asWhite": "string - summary of their white opening tendencies",
+    "asBlack": "string - summary of their black opening tendencies",
+    "recommendation": "string - coaching advice on their opening choices"
+  },
+  "endgameTendency": "string - overall endgame pattern observation",
+  "coachingPlan": ["string - ordered improvement priorities, 3-5 items"]
+}
+
+Include 2-4 strengths and 2-4 weaknesses. Each must reference specific games as examples. Calibrate advice to the player's rating level.`;
+
+export async function analyzePlayerMeta(
+  username: string,
+  gamesSummary: string,
+  rating: number,
+  gamesCount: number
+): Promise<MetaAnalysisResult> {
+  const message = await client.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 4096,
+    system: META_SYSTEM_PROMPT,
+    messages: [
+      {
+        role: "user",
+        content: `Analyze the game history for ${username} (current rating ~${rating}, ${gamesCount} games below). Identify recurring patterns and provide a coaching plan.\n\n${gamesSummary}`,
+      },
+    ],
+  });
+
+  const responseText =
+    message.content[0].type === "text" ? message.content[0].text : "";
+  const jsonStr = extractJson(responseText);
+
+  try {
+    return JSON.parse(jsonStr) as MetaAnalysisResult;
+  } catch {
+    throw new Error("Failed to parse meta analysis response from Claude");
+  }
 }

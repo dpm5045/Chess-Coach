@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PlayerProfile } from "@/lib/types";
 import { PlayerCard } from "@/components/player-card";
 import { PlayerCardSkeleton } from "@/components/loading-skeleton";
@@ -9,29 +9,44 @@ import { ALLOWED_USERS } from "@/lib/chess-com";
 
 export default function Home() {
   const router = useRouter();
-  const [playerData, setPlayerData] = useState<PlayerProfile | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [players, setPlayers] = useState<Map<string, PlayerProfile>>(new Map());
+  const [loading, setLoading] = useState(true);
+  const [errors, setErrors] = useState<Map<string, string>>(new Map());
 
-  async function handleSelect(username: string) {
-    setLoading(true);
-    setError(null);
-    setPlayerData(null);
+  useEffect(() => {
+    async function fetchAll() {
+      const results = await Promise.allSettled(
+        ALLOWED_USERS.map(async (username) => {
+          const res = await fetch(`/api/player/${encodeURIComponent(username)}`);
+          if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || "Player not found");
+          }
+          const data: PlayerProfile = await res.json();
+          return { username, data };
+        })
+      );
 
-    try {
-      const res = await fetch(`/api/player/${encodeURIComponent(username)}`);
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Player not found");
+      const newPlayers = new Map<string, PlayerProfile>();
+      const newErrors = new Map<string, string>();
+
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        if (result.status === "fulfilled") {
+          newPlayers.set(result.value.username, result.value.data);
+        } else {
+          const msg = result.reason instanceof Error ? result.reason.message : "Something went wrong";
+          newErrors.set(ALLOWED_USERS[i], msg);
+        }
       }
-      const data: PlayerProfile = await res.json();
-      setPlayerData(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
+
+      setPlayers(newPlayers);
+      setErrors(newErrors);
       setLoading(false);
     }
-  }
+
+    fetchAll();
+  }, []);
 
   return (
     <div className="mx-auto max-w-lg md:max-w-2xl px-4 pt-12">
@@ -42,40 +57,46 @@ export default function Home() {
         </p>
       </div>
 
-      <div className="mb-6 flex gap-3">
-        {ALLOWED_USERS.map((user) => (
-          <button
-            key={user}
-            onClick={() => handleSelect(user)}
-            disabled={loading}
-            className="flex-1 rounded-lg bg-surface-card px-4 py-4 text-lg font-semibold text-gray-200 ring-1 ring-gray-700 transition hover:ring-accent-blue disabled:opacity-50"
-          >
-            {user}
-          </button>
-        ))}
+      <div className="space-y-6">
+        {ALLOWED_USERS.map((user) => {
+          const data = players.get(user);
+          const error = errors.get(user);
+
+          return (
+            <div key={user}>
+              {loading && <PlayerCardSkeleton />}
+
+              {error && (
+                <div className="rounded-lg bg-red-900/30 px-4 py-3 text-accent-red">
+                  {user}: {error}
+                </div>
+              )}
+
+              {data && (
+                <div className="space-y-3">
+                  <PlayerCard data={data} />
+                  <button
+                    onClick={() =>
+                      router.push(`/games/${encodeURIComponent(data.profile.username)}`)
+                    }
+                    className="w-full rounded-lg bg-accent-green py-3 text-lg font-semibold text-white"
+                  >
+                    Analyze Games
+                  </button>
+                  <button
+                    onClick={() =>
+                      router.push(`/meta/${encodeURIComponent(data.profile.username)}`)
+                    }
+                    className="w-full rounded-lg bg-accent-blue py-3 text-lg font-semibold text-white"
+                  >
+                    Meta Analysis
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
-
-      {error && (
-        <div className="mb-4 rounded-lg bg-red-900/30 px-4 py-3 text-accent-red">
-          {error}
-        </div>
-      )}
-
-      {loading && <PlayerCardSkeleton />}
-
-      {playerData && (
-        <div className="space-y-4">
-          <PlayerCard data={playerData} />
-          <button
-            onClick={() =>
-              router.push(`/games/${encodeURIComponent(playerData.profile.username)}`)
-            }
-            className="w-full rounded-lg bg-accent-green py-3 text-lg font-semibold text-white"
-          >
-            Analyze Games
-          </button>
-        </div>
-      )}
     </div>
   );
 }

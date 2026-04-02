@@ -37,3 +37,16 @@ export function AnalysisSkeleton() {
     </div>
   );
 }
+
+export function MetaAnalysisSkeleton() {
+  return (
+    <div className="animate-pulse space-y-4">
+      <div className="h-32 rounded-xl bg-surface-card" />
+      <div className="h-48 rounded-xl bg-surface-card" />
+      <div className="h-48 rounded-xl bg-surface-card" />
+      <div className="h-28 rounded-xl bg-surface-card" />
+      <div className="h-20 rounded-xl bg-surface-card" />
+      <div className="h-36 rounded-xl bg-surface-card" />
+    </div>
+  );
+}

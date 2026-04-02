@@ -40,6 +40,7 @@ export function BottomNav() {
     if ("path" in item && item.path) return pathname === item.path;
     if ("pathPrefix" in item && item.pathPrefix)
       return pathname.startsWith(item.pathPrefix);
+    if (item.label === "Analysis") return pathname.startsWith("/meta");
     return false;
   }
 
