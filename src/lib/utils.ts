@@ -39,16 +39,6 @@ export function getOpponent(
   return { username: opp.username, rating: opp.rating };
 }
 
-export function getRatingChange(
-  game: ChessComGame,
-  username: string
-): string {
-  const outcome = getPlayerOutcome(game, username);
-  if (outcome === "win") return "+";
-  if (outcome === "loss") return "-";
-  return "=";
-}
-
 export function formatDate(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleDateString("en-US", {
     month: "short",

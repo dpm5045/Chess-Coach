@@ -42,7 +42,8 @@ export default function AnalysisPage() {
       const rating = game[color].rating;
       fetchAnalysis(game.pgn, username, color, rating);
     }
-  }, [game, analysis, loading]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game, analysis, loading, username]);
 
   if (!gameUrl) {
     return (
@@ -82,7 +83,7 @@ export default function AnalysisPage() {
     <div className="mx-auto max-w-lg px-4 pt-6">
       <button
         onClick={() => router.push(`/games/${encodeURIComponent(username)}`)}
-        className="mb-4 text-sm text-gray-400"
+        className="mb-4 min-h-[44px] flex items-center text-sm text-gray-400"
       >
         &larr; Back to games
       </button>

@@ -54,7 +54,7 @@ export default function GamesPage() {
     <div className="mx-auto max-w-lg px-4 pt-6">
       <button
         onClick={() => router.push("/")}
-        className="mb-4 text-sm text-gray-400"
+        className="mb-4 min-h-[44px] flex items-center text-sm text-gray-400"
       >
         &larr; Back to search
       </button>

@@ -74,5 +74,10 @@ export async function analyzeGame(
   const responseText =
     message.content[0].type === "text" ? message.content[0].text : "";
   const jsonStr = extractJson(responseText);
-  return JSON.parse(jsonStr) as AnalysisResult;
+
+  try {
+    return JSON.parse(jsonStr) as AnalysisResult;
+  } catch {
+    throw new Error("Failed to parse analysis response from Claude");
+  }
 }

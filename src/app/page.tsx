@@ -81,7 +81,7 @@ export default function Home() {
             }
             className="w-full rounded-lg bg-accent-green py-3 text-lg font-semibold text-white"
           >
-            View Games
+            Analyze Games
           </button>
         </div>
       )}
