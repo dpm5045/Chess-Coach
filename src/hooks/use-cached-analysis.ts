@@ -10,27 +10,28 @@ interface CacheEntry {
 }
 
 export function useCachedAnalysis(gameUrl: string) {
-  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   const cacheKey = `${CACHE_PREFIX}${gameUrl}`;
 
-  useEffect(() => {
+  // Check localStorage synchronously to set initial state
+  const initial = (() => {
     try {
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
         const entry: CacheEntry = JSON.parse(cached);
         if (Date.now() - entry.timestamp < CACHE_TTL_MS) {
-          setAnalysis(entry.result);
-        } else {
-          localStorage.removeItem(cacheKey);
+          return entry.result;
         }
+        localStorage.removeItem(cacheKey);
       }
     } catch {
       // Ignore cache read errors
     }
-  }, [cacheKey]);
+    return null;
+  })();
+
+  const [analysis, setAnalysis] = useState<AnalysisResult | null>(initial);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function fetchAnalysis(
     pgn: string,
