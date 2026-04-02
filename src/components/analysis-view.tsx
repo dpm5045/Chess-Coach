@@ -1,4 +1,6 @@
 import { AnalysisResult, CriticalMoment } from "@/lib/types";
+import { getFenAtMove } from "@/lib/chess-utils";
+import { ChessBoard } from "@/components/chess-board";
 
 function AssessmentBadge({ assessment }: { assessment: string }) {
   const colors: Record<string, string> = {
@@ -32,7 +34,13 @@ function MomentTypeBadge({ type }: { type: CriticalMoment["type"] }) {
   );
 }
 
-export function AnalysisView({ analysis }: { analysis: AnalysisResult }) {
+export function AnalysisView({
+  analysis,
+  pgn,
+}: {
+  analysis: AnalysisResult;
+  pgn?: string;
+}) {
   return (
     <div className="space-y-4">
       {/* Summary */}
@@ -64,26 +72,32 @@ export function AnalysisView({ analysis }: { analysis: AnalysisResult }) {
         <h3 className="mb-3 text-sm font-semibold text-gray-400">
           CRITICAL MOMENTS
         </h3>
-        <div className="space-y-3">
-          {analysis.criticalMoments.map((moment, i) => (
-            <div
-              key={i}
-              className="rounded-lg bg-surface-elevated px-3 py-3"
-            >
-              <div className="mb-1 flex items-center justify-between">
-                <span className="font-mono text-sm font-bold">
-                  Move {moment.moveNumber}: {moment.move}
-                </span>
-                <MomentTypeBadge type={moment.type} />
+        <div className="space-y-4">
+          {analysis.criticalMoments.map((moment, i) => {
+            const fen = pgn
+              ? getFenAtMove(pgn, moment.moveNumber, moment.move)
+              : null;
+
+            return (
+              <div key={i} className="space-y-2">
+                {fen && <ChessBoard fen={fen} />}
+                <div className="rounded-lg bg-surface-elevated px-3 py-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="font-mono text-sm font-bold">
+                      Move {moment.moveNumber}: {moment.move}
+                    </span>
+                    <MomentTypeBadge type={moment.type} />
+                  </div>
+                  <p className="text-sm text-gray-300">{moment.comment}</p>
+                  {moment.suggestion && (
+                    <p className="mt-1 text-sm text-accent-green">
+                      Better: {moment.suggestion}
+                    </p>
+                  )}
+                </div>
               </div>
-              <p className="text-sm text-gray-300">{moment.comment}</p>
-              {moment.suggestion && (
-                <p className="mt-1 text-sm text-accent-green">
-                  Better: {moment.suggestion}
-                </p>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
