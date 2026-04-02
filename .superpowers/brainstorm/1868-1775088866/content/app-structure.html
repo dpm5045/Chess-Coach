@@ -1,0 +1,99 @@
+<h2>App Structure — 3 Core Views</h2>
+<p class="subtitle">Mobile-first layout for iPhone/iPad. Tap through the flow.</p>
+
+<div class="cards" style="gap: 1.5rem;">
+  <div class="card" style="cursor:default;">
+    <div class="card-image" style="background: #1a1a2e; padding: 2rem; text-align: center;">
+      <div style="background: #16213e; border-radius: 12px; padding: 1.5rem; max-width: 320px; margin: 0 auto;">
+        <div style="font-size: 1.5rem; font-weight: 700; color: #e0e0e0; margin-bottom: 1rem;">♟ Chess Coach</div>
+        <div style="background: #0f3460; border-radius: 8px; padding: 0.75rem; margin-bottom: 1rem;">
+          <input class="mock-input" placeholder="Enter Chess.com username" style="width: 100%; text-align: center; border: none;">
+        </div>
+        <button class="mock-button" style="width: 100%;">Analyze Games</button>
+        <div style="margin-top: 1rem; color: #888; font-size: 0.8rem;">— Player Card Preview —</div>
+        <div style="background: #1a1a3e; border-radius: 8px; padding: 0.75rem; margin-top: 0.5rem; display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 40px; height: 40px; background: #333; border-radius: 50%;"></div>
+          <div style="text-align: left;">
+            <div style="color: #e0e0e0; font-weight: 600;">MasterPlanDaniel</div>
+            <div style="color: #4CAF50; font-size: 0.85rem;">Rapid: 1200</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>1. Home / Search</h3>
+      <p>Enter username → see player card with rating → tap "Analyze Games"</p>
+    </div>
+  </div>
+
+  <div class="card" style="cursor:default;">
+    <div class="card-image" style="background: #1a1a2e; padding: 2rem; text-align: center;">
+      <div style="background: #16213e; border-radius: 12px; padding: 1rem; max-width: 320px; margin: 0 auto;">
+        <div style="color: #aaa; font-size: 0.75rem; margin-bottom: 0.75rem;">RECENT RAPID GAMES</div>
+        <div style="background: #1a1a3e; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+          <div style="text-align: left;">
+            <div style="color: #e0e0e0; font-weight: 600;">vs opponent123</div>
+            <div style="color: #888; font-size: 0.75rem;">Mar 31, 2026 • 15+10</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="color: #4CAF50; font-weight: 700;">WIN</div>
+            <div style="color: #4CAF50; font-size: 0.75rem;">+8</div>
+          </div>
+        </div>
+        <div style="background: #1a1a3e; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+          <div style="text-align: left;">
+            <div style="color: #e0e0e0; font-weight: 600;">vs player456</div>
+            <div style="color: #888; font-size: 0.75rem;">Mar 30, 2026 • 10+0</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="color: #f44336; font-weight: 700;">LOSS</div>
+            <div style="color: #f44336; font-size: 0.75rem;">-12</div>
+          </div>
+        </div>
+        <div style="background: #1a1a3e; border-radius: 8px; padding: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+          <div style="text-align: left;">
+            <div style="color: #e0e0e0; font-weight: 600;">vs chess_fan99</div>
+            <div style="color: #888; font-size: 0.75rem;">Mar 29, 2026 • 15+10</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="color: #FFD700; font-weight: 700;">DRAW</div>
+            <div style="color: #888; font-size: 0.75rem;">+0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>2. Game List</h3>
+      <p>Recent rapid games with opponent, result, date, rating change. Tap to analyze.</p>
+    </div>
+  </div>
+
+  <div class="card" style="cursor:default;">
+    <div class="card-image" style="background: #1a1a2e; padding: 2rem; text-align: center;">
+      <div style="background: #16213e; border-radius: 12px; padding: 1rem; max-width: 320px; margin: 0 auto;">
+        <div style="color: #aaa; font-size: 0.75rem; margin-bottom: 0.5rem;">GAME ANALYSIS</div>
+        <div style="color: #e0e0e0; font-weight: 600; margin-bottom: 0.75rem;">vs opponent123 — WIN</div>
+        <div style="background: #0d4420; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.5rem; text-align: left;">
+          <div style="color: #4CAF50; font-weight: 600; font-size: 0.8rem;">✓ Opening</div>
+          <div style="color: #ccc; font-size: 0.75rem;">Solid Queen's Gambit Declined. Good development.</div>
+        </div>
+        <div style="background: #4a1c1c; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.5rem; text-align: left;">
+          <div style="color: #f44336; font-weight: 600; font-size: 0.8rem;">⚠ Move 14: Nxe5??</div>
+          <div style="color: #ccc; font-size: 0.75rem;">This drops a piece. Better was Bd3 maintaining pressure.</div>
+        </div>
+        <div style="background: #1a1a3e; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.5rem; text-align: left;">
+          <div style="color: #FFD700; font-weight: 600; font-size: 0.8rem;">💡 Key Moment: Move 22</div>
+          <div style="color: #ccc; font-size: 0.75rem;">You found the winning tactic! Rxf7+ was excellent.</div>
+        </div>
+        <div style="background: #16213e; border: 1px solid #333; border-radius: 8px; padding: 0.75rem; text-align: left;">
+          <div style="color: #aaa; font-weight: 600; font-size: 0.8rem;">📊 Summary</div>
+          <div style="color: #ccc; font-size: 0.75rem;">Good game overall. Focus on calculating before captures in the middlegame.</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>3. Game Analysis</h3>
+      <p>Claude's coaching: opening assessment, blunders, key moments, and overall summary.</p>
+    </div>
+  </div>
+</div>

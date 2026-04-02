@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash:*)",
+      "WebSearch",
+      "WebFetch(domain:api.chess.com)",
+      "WebFetch(domain:support.chess.com)",
+      "WebFetch(domain:grainme.github.io)",
+      "WebFetch(domain:www.chess.com)",
+      "WebFetch(domain:chessnerd.net)",
+      "WebFetch(domain:gist.github.com)",
+      "mcp__plugin_context7_context7__resolve-library-id",
+      "mcp__plugin_context7_context7__query-docs",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --app --src-dir --no-eslint --import-alias \"@/*\" --use-npm)",
+      "Read(//c/Users/dpm50/Documents/Claude-Code/**)",
+      "Bash(npx create-next-app@latest chess-temp --typescript --tailwind --app --src-dir --no-eslint --import-alias \"@/*\" --use-npm)",
+      "Bash(cp -r \"C:/Users/dpm50/Documents/Claude-Code/chess-temp/\"* \"C:/Users/dpm50/Documents/Claude-Code/Chess/\")",
+      "Bash(cp -r \"C:/Users/dpm50/Documents/Claude-Code/chess-temp/\".* \"C:/Users/dpm50/Documents/Claude-Code/Chess/\")",
+      "Bash(rm -rf \"C:/Users/dpm50/Documents/Claude-Code/chess-temp\")",
+      "Bash(npm install:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npm run:*)"
+    ]
+  }
+}
