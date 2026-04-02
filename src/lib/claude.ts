@@ -1,5 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { AnalysisResult } from "./types";
+import { AnalysisResult, CriticalMoment } from "./types";
+import {
+  isLegalMoveAt,
+  moveExistsInGame,
+  getAllMoves,
+} from "./chess-utils";
 
 const client = new Anthropic();
 
@@ -33,7 +38,9 @@ You will receive a PGN of a chess game and information about which player you ar
   }
 }
 
-Identify 3-5 critical moments. Calibrate your advice to the player's rating level — don't suggest grandmaster-level ideas to a beginner.`;
+Identify 3-5 critical moments. Calibrate your advice to the player's rating level — don't suggest grandmaster-level ideas to a beginner.
+
+IMPORTANT: You will also receive FEN positions at key points in the game. Use them to verify your analysis — only suggest moves that are legal in the given position. The "move" field MUST exactly match the SAN notation from the PGN. The "suggestion" field MUST be a legal move in standard algebraic notation for that position.`;
 
 function buildUserPrompt(
   pgn: string,
@@ -41,10 +48,23 @@ function buildUserPrompt(
   color: "white" | "black",
   rating: number
 ): string {
+  // Include FEN positions at every move so Claude can ground its analysis
+  // in the actual board state rather than hallucinating positions.
+  const moves = getAllMoves(pgn);
+  const fenList = moves
+    .map(
+      (m) =>
+        `${m.moveNumber}${m.color === "w" ? "." : "..."} ${m.san} → FEN: ${m.fen}`
+    )
+    .join("\n");
+
   return `Analyze this game for ${username} (playing ${color}, rated ${rating}).
 
 PGN:
-${pgn}`;
+${pgn}
+
+Position after each move:
+${fenList}`;
 }
 
 function extractJson(text: string): string {
@@ -75,9 +95,31 @@ export async function analyzeGame(
     message.content[0].type === "text" ? message.content[0].text : "";
   const jsonStr = extractJson(responseText);
 
+  let result: AnalysisResult;
   try {
-    return JSON.parse(jsonStr) as AnalysisResult;
+    result = JSON.parse(jsonStr) as AnalysisResult;
   } catch {
     throw new Error("Failed to parse analysis response from Claude");
   }
+
+  // Post-process: validate that moves and suggestions are legal.
+  // This catches hallucinated moves that don't exist on the board.
+  result.criticalMoments = result.criticalMoments
+    .filter((cm: CriticalMoment) => {
+      // Drop moments where the referenced move doesn't exist in the game
+      return moveExistsInGame(pgn, cm.moveNumber, cm.move);
+    })
+    .map((cm: CriticalMoment) => {
+      // Clear suggestions that aren't legal moves in the position
+      if (
+        cm.suggestion &&
+        cm.suggestion.length > 0 &&
+        !isLegalMoveAt(pgn, cm.moveNumber, cm.move, cm.suggestion)
+      ) {
+        return { ...cm, suggestion: "" };
+      }
+      return cm;
+    });
+
+  return result;
 }
