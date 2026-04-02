@@ -1,6 +1,17 @@
 import { createHash } from "crypto";
-import { kv } from "@vercel/kv";
+import { Redis } from "@upstash/redis";
 import { AnalysisResult } from "./types";
+
+/**
+ * Lazily initialize the Redis client.
+ * Returns null if the required env vars are not set.
+ */
+function getRedis(): Redis | null {
+  const url = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
+  if (!url || !token) return null;
+  return new Redis({ url, token });
+}
 
 /**
  * Build a deterministic cache key from the PGN.
@@ -8,7 +19,6 @@ import { AnalysisResult } from "./types";
  * the same regardless of minor formatting differences.
  */
 function cacheKey(pgn: string): string {
-  // Strip header tags (e.g. [Event "..."]) and normalize whitespace
   const moves = pgn
     .replace(/\[.*?\]\s*/g, "")
     .replace(/\s+/g, " ")
@@ -18,32 +28,35 @@ function cacheKey(pgn: string): string {
 }
 
 /**
- * Try to read a cached analysis from Vercel KV.
- * Returns null if KV is not configured or the key doesn't exist.
+ * Try to read a cached analysis from Upstash Redis.
+ * Returns null if Redis is not configured or the key doesn't exist.
  */
 export async function getCachedAnalysis(
   pgn: string
 ): Promise<AnalysisResult | null> {
   try {
-    const result = await kv.get<AnalysisResult>(cacheKey(pgn));
+    const redis = getRedis();
+    if (!redis) return null;
+    const result = await redis.get<AnalysisResult>(cacheKey(pgn));
     return result ?? null;
   } catch {
-    // KV not configured or unavailable — skip silently
     return null;
   }
 }
 
 /**
- * Write an analysis result to Vercel KV.
- * TTL: 90 days. Fails silently if KV is not configured.
+ * Write an analysis result to Upstash Redis.
+ * TTL: 90 days. Fails silently if Redis is not configured.
  */
 export async function setCachedAnalysis(
   pgn: string,
   analysis: AnalysisResult
 ): Promise<void> {
   try {
-    await kv.set(cacheKey(pgn), analysis, { ex: 90 * 24 * 60 * 60 });
+    const redis = getRedis();
+    if (!redis) return;
+    await redis.set(cacheKey(pgn), analysis, { ex: 90 * 24 * 60 * 60 });
   } catch {
-    // KV not configured or unavailable — skip silently
+    // Redis not configured or unavailable — skip silently
   }
 }
