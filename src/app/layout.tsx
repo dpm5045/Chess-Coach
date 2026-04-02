@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { BottomNav } from "@/components/bottom-nav";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -21,6 +22,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className="min-h-screen bg-surface text-gray-200 antialiased">
         <main className="pb-20">{children}</main>
+        <BottomNav />
       </body>
     </html>
   );
