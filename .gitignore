@@ -45,3 +45,4 @@ scripts/data/
 
 .vercel
 .env*.local
+.worktrees/
