@@ -106,7 +106,19 @@ export async function POST(request: Request) {
     const latestColor = getPlayerColor(latest, username);
     const currentRating = latest[latestColor].rating;
 
-    const gamesSummary = await buildGamesSummary(games, username);
+    // Build time control breakdown for the prompt
+    const tcCounts: Record<string, { total: number; wins: number }> = {};
+    for (const g of games) {
+      const tc = g.time_class;
+      if (!tcCounts[tc]) tcCounts[tc] = { total: 0, wins: 0 };
+      tcCounts[tc].total++;
+      if (getPlayerOutcome(g, username) === "win") tcCounts[tc].wins++;
+    }
+    const tcSummary = Object.entries(tcCounts)
+      .map(([tc, { total, wins }]) => `${tc}: ${total} games (${wins} wins, ${Math.round(wins / total * 100)}% win rate)`)
+      .join(", ");
+
+    const gamesSummary = `Time control breakdown: ${tcSummary}\n\n` + await buildGamesSummary(games, username);
     const result = await analyzePlayerMeta(
       username,
       gamesSummary,

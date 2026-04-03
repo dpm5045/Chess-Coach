@@ -116,6 +116,22 @@ export function MetaAnalysisView({ data }: { data: MetaAnalysisResult }) {
         </div>
       </div>
 
+      {/* Time Control Insights */}
+      {data.timeControlInsights && (
+        <div className="rounded-xl bg-surface-card p-4">
+          <h2 className="text-sm font-semibold uppercase text-gray-400 mb-3">
+            Performance by Time Control
+          </h2>
+          <p className="text-xs text-gray-500 mb-2">{data.timeControlInsights.breakdown}</p>
+          <p className="text-sm text-gray-200 mb-3">{data.timeControlInsights.comparison}</p>
+          <div className="rounded-lg bg-accent-blue/10 px-3 py-2">
+            <p className="text-sm text-accent-blue">
+              {data.timeControlInsights.recommendation}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Endgame */}
       <div className="rounded-xl bg-surface-card p-4">
         <h2 className="text-sm font-semibold uppercase text-gray-400 mb-2">

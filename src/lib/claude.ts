@@ -180,7 +180,9 @@ export async function analyzeGame(
 
 const META_SYSTEM_PROMPT = `You are a long-term chess coach reviewing a student's body of work across many games. Your tone is warm and supportive — celebrate their strengths before addressing weaknesses. Frame improvements as the next step in their journey, not as failures.
 
-You will receive summaries or move lists from multiple games for one player. Identify recurring patterns across games — not one-off events. Look for consistent themes in openings, tactics, positional play, time management, and endgames.
+You will receive summaries or move lists from multiple games for one player across ALL time controls (rapid, blitz, bullet, daily). Identify recurring patterns across games — not one-off events. Look for consistent themes in openings, tactics, positional play, time management, and endgames.
+
+TIME CONTROL ANALYSIS: The games span different time controls. Compare the player's performance across formats. Do they play better in rapid vs blitz? Do they blunder more under time pressure? Are their openings different by format? This cross-format comparison is a key part of your coaching.
 
 Respond with ONLY valid JSON (no markdown, no code fences, no text outside the JSON) matching this exact schema:
 
@@ -214,6 +216,11 @@ Respond with ONLY valid JSON (no markdown, no code fences, no text outside the J
     "asWhite": "string - summary of their white opening tendencies",
     "asBlack": "string - summary of their black opening tendencies",
     "recommendation": "string - coaching advice on their opening choices"
+  },
+  "timeControlInsights": {
+    "breakdown": "string - how many games in each time control and win rates",
+    "comparison": "string - 2-3 sentences comparing performance across time controls (e.g. more blunders in blitz, stronger openings in rapid, etc.)",
+    "recommendation": "string - which time control to focus on for improvement and why"
   },
   "endgameTendency": "string - overall endgame pattern observation",
   "coachingPlan": ["string - ordered improvement priorities, 3-5 items"]

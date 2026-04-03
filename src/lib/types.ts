@@ -156,6 +156,11 @@ export interface MetaAnalysisResult {
     asBlack: string;
     recommendation: string;
   };
+  timeControlInsights: {
+    breakdown: string;
+    comparison: string;
+    recommendation: string;
+  };
   endgameTendency: string;
   coachingPlan: string[];
 }
