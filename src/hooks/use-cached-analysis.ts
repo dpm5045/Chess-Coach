@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { AnalysisResult } from "@/lib/types";
+import { AnalysisResult, EngineAnalysis } from "@/lib/types";
+import { getAllMoves } from "@/lib/chess-utils";
+import { evaluateGame } from "@/lib/stockfish";
+import { getCachedEval, setCachedEval } from "@/lib/eval-cache";
 
 const CACHE_PREFIX = "analysis:";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -9,10 +12,11 @@ interface CacheEntry {
   timestamp: number;
 }
 
+export type AnalysisPhase = "idle" | "engine" | "coaching" | "done" | "error";
+
 export function useCachedAnalysis(gameUrl: string) {
   const cacheKey = `${CACHE_PREFIX}${gameUrl}`;
 
-  // Check localStorage synchronously to set initial state
   const initial = (() => {
     try {
       const cached = localStorage.getItem(cacheKey);
@@ -30,7 +34,10 @@ export function useCachedAnalysis(gameUrl: string) {
   })();
 
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(initial);
+  const [engineAnalysis, setEngineAnalysis] = useState<EngineAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
+  const [phase, setPhase] = useState<AnalysisPhase>("idle");
+  const [engineProgress, setEngineProgress] = useState({ completed: 0, total: 0 });
   const [error, setError] = useState<string | null>(null);
 
   function saveToLocalStorage(result: AnalysisResult) {
@@ -38,14 +45,10 @@ export function useCachedAnalysis(gameUrl: string) {
       const entry: CacheEntry = { result, timestamp: Date.now() };
       localStorage.setItem(cacheKey, JSON.stringify(entry));
     } catch {
-      // Ignore cache write errors (quota exceeded, etc.)
+      // Ignore cache write errors
     }
   }
 
-  /**
-   * Check the server-side Redis cache only (no Claude API call).
-   * If cached, loads the result. If not, does nothing.
-   */
   async function checkCache(pgn: string) {
     try {
       const res = await fetch("/api/analyze", {
@@ -54,22 +57,19 @@ export function useCachedAnalysis(gameUrl: string) {
         body: JSON.stringify({ pgn, username: "_", color: "white", cacheOnly: true }),
       });
 
-      if (res.status === 204) return; // Not cached — do nothing
+      if (res.status === 204) return;
 
       if (res.ok) {
         const result: AnalysisResult = await res.json();
         setAnalysis(result);
         saveToLocalStorage(result);
+        setPhase("done");
       }
     } catch {
-      // Cache check failed — not critical, do nothing
+      // Cache check failed — not critical
     }
   }
 
-  /**
-   * Request a full analysis from Claude (costs API credits).
-   * Only call this when the user explicitly clicks "Analyze".
-   */
   async function fetchAnalysis(
     pgn: string,
     username: string,
@@ -78,12 +78,28 @@ export function useCachedAnalysis(gameUrl: string) {
   ) {
     setLoading(true);
     setError(null);
+    setPhase("engine");
 
     try {
+      // Phase 1: Run Stockfish engine evaluation (client-side)
+      let evals: EngineAnalysis | null = getCachedEval(pgn);
+
+      if (!evals) {
+        const moves = getAllMoves(pgn);
+        evals = await evaluateGame(moves, (completed, total) => {
+          setEngineProgress({ completed, total });
+        });
+        setCachedEval(pgn, evals);
+      }
+
+      setEngineAnalysis(evals);
+      setPhase("coaching");
+
+      // Phase 2: Send PGN + engine evals to Claude for coaching commentary
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pgn, username, color, rating }),
+        body: JSON.stringify({ pgn, username, color, rating, engineEvals: evals }),
       });
 
       if (!res.ok) {
@@ -94,12 +110,14 @@ export function useCachedAnalysis(gameUrl: string) {
       const result: AnalysisResult = await res.json();
       setAnalysis(result);
       saveToLocalStorage(result);
+      setPhase("done");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
+      setPhase("error");
     } finally {
       setLoading(false);
     }
   }
 
-  return { analysis, loading, error, checkCache, fetchAnalysis };
+  return { analysis, engineAnalysis, loading, phase, engineProgress, error, checkCache, fetchAnalysis };
 }

@@ -20,6 +20,8 @@ ENDGAME ANALYSIS: Pay special attention to endgame efficiency when the player ha
 - King and pawn endgames where centralization or opposition was missed
 Even if the player won, flag these as "missed_tactic" critical moments. Converting a won position efficiently is a key skill at every level.
 
+ENGINE EVALUATIONS: You may receive Stockfish engine evaluations for each position. When provided, USE THEM as your primary source of truth for identifying mistakes and missed opportunities. The engine eval (in centipawns) tells you objectively how good each move was. A drop of 50+ centipawns is an inaccuracy, 100+ is a mistake, 200+ is a blunder. Reference the engine's preferred move when suggesting alternatives. Do NOT contradict the engine evaluation — if the engine says a move lost 150cp, do not call it "solid" or "fine".
+
 You will receive a PGN of a chess game and information about which player you are coaching. Analyze the game and respond with ONLY valid JSON (no markdown, no code fences, no text outside the JSON) matching this exact schema:
 
 {
@@ -56,10 +58,9 @@ function buildUserPrompt(
   pgn: string,
   username: string,
   color: "white" | "black",
-  rating: number
+  rating: number,
+  engineEvals?: { positions: Array<{ moveNumber: number; color: "w" | "b"; san: string; scoreCp: number; mate: number | null; bestLine: string[]; depth: number }>; drops: Array<{ moveNumber: number; color: "w" | "b"; san: string; evalBefore: number; evalAfter: number; cpLoss: number; engineBest: string; engineLine: string[] }> }
 ): string {
-  // Include FEN positions at every move so Claude can ground its analysis
-  // in the actual board state rather than hallucinating positions.
   const moves = getAllMoves(pgn);
   const fenList = moves
     .map(
@@ -68,13 +69,38 @@ function buildUserPrompt(
     )
     .join("\n");
 
-  return `Analyze this game for ${username} (playing ${color}, rated ${rating}).
+  let prompt = `Analyze this game for ${username} (playing ${color}, rated ${rating}).
 
 PGN:
 ${pgn}
 
 Position after each move:
 ${fenList}`;
+
+  if (engineEvals && engineEvals.positions.length > 0) {
+    const evalList = engineEvals.positions
+      .map((p) => {
+        const score = p.mate !== null ? `mate in ${p.mate}` : `${p.scoreCp}cp`;
+        const moveLabel = `${p.moveNumber}${p.color === "w" ? "." : "..."} ${p.san}`;
+        return `${moveLabel} → eval: ${score} (depth ${p.depth})`;
+      })
+      .join("\n");
+
+    prompt += `\n\nStockfish evaluation after each move (from White's perspective, positive = White advantage):\n${evalList}`;
+
+    if (engineEvals.drops.length > 0) {
+      const dropList = engineEvals.drops
+        .map((d) => {
+          const moveLabel = `${d.moveNumber}${d.color === "w" ? "." : "..."} ${d.san}`;
+          return `${moveLabel}: lost ${d.cpLoss}cp (was ${d.evalBefore}cp, now ${d.evalAfter}cp). Engine preferred: ${d.engineBest}`;
+        })
+        .join("\n");
+
+      prompt += `\n\nSignificant eval drops (mistakes/inaccuracies detected by engine):\n${dropList}`;
+    }
+  }
+
+  return prompt;
 }
 
 function extractJson(text: string): string {
@@ -87,7 +113,8 @@ export async function analyzeGame(
   pgn: string,
   username: string,
   color: "white" | "black",
-  rating: number
+  rating: number,
+  engineEvals?: { positions: Array<{ moveNumber: number; color: "w" | "b"; san: string; scoreCp: number; mate: number | null; bestLine: string[]; depth: number }>; drops: Array<{ moveNumber: number; color: "w" | "b"; san: string; evalBefore: number; evalAfter: number; cpLoss: number; engineBest: string; engineLine: string[] }> }
 ): Promise<AnalysisResult> {
   const message = await client.messages.create({
     model: "claude-sonnet-4-20250514",
@@ -96,7 +123,7 @@ export async function analyzeGame(
     messages: [
       {
         role: "user",
-        content: buildUserPrompt(pgn, username, color, rating),
+        content: buildUserPrompt(pgn, username, color, rating, engineEvals),
       },
     ],
   });

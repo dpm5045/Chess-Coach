@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { AnalysisResult, CriticalMoment } from "@/lib/types";
+import { AnalysisResult, CriticalMoment, EngineAnalysis } from "@/lib/types";
 import { getAllMoves, MoveDetail } from "@/lib/chess-utils";
 import { ChessBoard } from "@/components/chess-board";
 
@@ -37,6 +37,32 @@ function MomentTypeBadge({ type }: { type: CriticalMoment["type"] }) {
   );
 }
 
+function EvalBar({ scoreCp, mate }: { scoreCp: number; mate: number | null }) {
+  let whitePercent: number;
+  let label: string;
+
+  if (mate !== null) {
+    whitePercent = mate > 0 ? 95 : 5;
+    label = `M${Math.abs(mate)}`;
+  } else {
+    const clamped = Math.max(-1000, Math.min(1000, scoreCp));
+    whitePercent = 50 + (clamped / 1000) * 45;
+    label = scoreCp >= 0 ? `+${(scoreCp / 100).toFixed(1)}` : (scoreCp / 100).toFixed(1);
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-3 w-16 overflow-hidden rounded-full bg-gray-800 border border-gray-700">
+        <div
+          className="h-full bg-white transition-all duration-300"
+          style={{ width: `${whitePercent}%` }}
+        />
+      </div>
+      <span className="font-mono text-xs text-gray-400">{label}</span>
+    </div>
+  );
+}
+
 function findCriticalMoment(
   moments: CriticalMoment[],
   moveNumber: number,
@@ -51,10 +77,12 @@ export function AnalysisView({
   analysis,
   pgn,
   playerColor,
+  engineAnalysis,
 }: {
   analysis: AnalysisResult;
   pgn?: string;
   playerColor?: "white" | "black";
+  engineAnalysis?: EngineAnalysis;
 }) {
   const [showAllMoves, setShowAllMoves] = useState(false);
   const [expandedMove, setExpandedMove] = useState<number | null>(null);
@@ -68,6 +96,16 @@ export function AnalysisView({
     }
     return keys;
   }, [analysis.criticalMoments]);
+
+  const evalMap = useMemo(() => {
+    const map = new Map<string, { scoreCp: number; mate: number | null }>();
+    if (engineAnalysis) {
+      for (const p of engineAnalysis.positions) {
+        map.set(`${p.moveNumber}-${p.color}`, { scoreCp: p.scoreCp, mate: p.mate });
+      }
+    }
+    return map;
+  }, [engineAnalysis]);
 
   const displayMoves: MoveDetail[] = showAllMoves
     ? allMoves
@@ -136,8 +174,8 @@ export function AnalysisView({
               move.san
             );
             const isExpanded = expandedMove === i;
-            const colorLabel = move.color === "w" ? "White" : "Black";
             const moveLabel = `${move.moveNumber}${move.color === "b" ? "..." : "."} ${move.san}`;
+            const evalData = evalMap.get(`${move.moveNumber}-${move.color}`);
 
             return (
               <div key={i} className="space-y-2">
@@ -163,6 +201,9 @@ export function AnalysisView({
                     <span className="text-xs text-gray-500">
                       {move.from}→{move.to}
                     </span>
+                    {evalData && (
+                      <EvalBar scoreCp={evalData.scoreCp} mate={evalData.mate} />
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     {critical && <MomentTypeBadge type={critical.type} />}

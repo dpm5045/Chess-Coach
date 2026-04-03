@@ -104,6 +104,34 @@ export interface CriticalMoment {
   suggestion?: string;
 }
 
+// Engine evaluation types
+
+export interface PositionEval {
+  moveNumber: number;
+  color: "w" | "b";
+  san: string;
+  scoreCp: number;
+  mate: number | null;
+  bestLine: string[];
+  depth: number;
+}
+
+export interface EngineAnalysis {
+  positions: PositionEval[];
+  drops: EvalDrop[];
+}
+
+export interface EvalDrop {
+  moveNumber: number;
+  color: "w" | "b";
+  san: string;
+  evalBefore: number;
+  evalAfter: number;
+  cpLoss: number;
+  engineBest: string;
+  engineLine: string[];
+}
+
 // Meta analysis types
 
 export interface MetaTheme {

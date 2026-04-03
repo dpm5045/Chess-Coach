@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { pgn, username, color, rating, cacheOnly } = body;
+    const { pgn, username, color, rating, cacheOnly, engineEvals } = body;
 
     if (!pgn || !username || !color) {
       return Response.json(
@@ -37,12 +37,7 @@ export async function POST(request: NextRequest) {
       return Response.json(null, { status: 204 });
     }
 
-    const analysis = await analyzeGame(
-      pgn,
-      username,
-      color,
-      rating || 1000
-    );
+    const analysis = await analyzeGame(pgn, username, color, rating || 1000, engineEvals);
 
     // Store in cache for future requests (fire-and-forget)
     setCachedAnalysis(pgn, analysis);

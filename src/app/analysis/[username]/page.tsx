@@ -16,7 +16,7 @@ export default function AnalysisPage() {
   const gameUrl = searchParams.get("game") || "";
 
   const [game, setGame] = useState<ChessComGame | null>(null);
-  const { analysis, loading, error, checkCache, fetchAnalysis } =
+  const { analysis, engineAnalysis, loading, phase, engineProgress, error, checkCache, fetchAnalysis } =
     useCachedAnalysis(gameUrl);
 
   useEffect(() => {
@@ -32,12 +32,9 @@ export default function AnalysisPage() {
         // Ignore parse errors
       }
     }
-    // No game in session storage — can't analyze without PGN
     setGame(null);
   }, [gameUrl]);
 
-  // Check server cache on load (free — just reads Redis), but do NOT
-  // auto-trigger a Claude API call. The user must click "Analyze" for that.
   useEffect(() => {
     if (game && !analysis && !loading) {
       checkCache(game.pgn);
@@ -111,12 +108,36 @@ export default function AnalysisPage() {
         </div>
       </div>
 
-      {/* Analysis */}
-      {loading && (
+      {/* Analysis phases */}
+      {loading && phase === "engine" && (
+        <div className="mb-4">
+          <div className="rounded-xl bg-surface-card p-6 text-center">
+            <div className="mb-3 text-2xl">&#9823;</div>
+            <p className="mb-3 text-gray-300">Running engine analysis...</p>
+            <div className="mx-auto max-w-xs">
+              <div className="h-2 rounded-full bg-surface-elevated overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-accent-blue transition-all duration-300"
+                  style={{
+                    width: engineProgress.total > 0
+                      ? `${(engineProgress.completed / engineProgress.total) * 100}%`
+                      : "0%",
+                  }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-gray-500">
+                {engineProgress.completed} / {engineProgress.total} positions
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {loading && phase === "coaching" && (
         <div>
           <div className="mb-4 text-center text-gray-400">
             <div className="mb-2 text-2xl">{"\uD83E\uDD14"}</div>
-            Coach is reviewing your game...
+            Coach is reviewing engine analysis...
           </div>
           <AnalysisSkeleton />
         </div>
@@ -152,12 +173,19 @@ export default function AnalysisPage() {
             Analyze Game
           </button>
           <p className="mt-3 text-xs text-gray-600">
-            Uses API credits. New games are batch-analyzed periodically at no cost.
+            Runs Stockfish locally, then sends to coach. Uses API credits.
           </p>
         </div>
       )}
 
-      {analysis && <AnalysisView analysis={analysis} pgn={game.pgn} playerColor={color} />}
+      {analysis && (
+        <AnalysisView
+          analysis={analysis}
+          pgn={game.pgn}
+          playerColor={color}
+          engineAnalysis={engineAnalysis ?? undefined}
+        />
+      )}
     </div>
   );
 }
