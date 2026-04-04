@@ -117,7 +117,7 @@ export async function analyzeGame(
   engineEvals?: { positions: Array<{ moveNumber: number; color: "w" | "b"; san: string; scoreCp: number; mate: number | null; bestLine: string[]; depth: number }>; drops: Array<{ moveNumber: number; color: "w" | "b"; san: string; evalBefore: number; evalAfter: number; cpLoss: number; engineBest: string; engineLine: string[] }> }
 ): Promise<AnalysisResult> {
   const message = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: 2048,
     system: SYSTEM_PROMPT,
     messages: [
@@ -235,7 +235,7 @@ export async function analyzePlayerMeta(
   gamesCount: number
 ): Promise<MetaAnalysisResult> {
   const message = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: 4096,
     system: META_SYSTEM_PROMPT,
     messages: [

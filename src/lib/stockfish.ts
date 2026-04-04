@@ -17,7 +17,7 @@ export async function evaluateGame(
 ): Promise<EngineAnalysis> {
   const worker = new Worker(
     new URL("./stockfish-worker.ts", import.meta.url),
-    { type: "module" }
+    { type: "classic" }
   );
 
   try {
