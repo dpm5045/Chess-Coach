@@ -15,35 +15,31 @@ export default function MetaAnalysisPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function fetchMetaAnalysis() {
-    setLoading(true);
-    setError(null);
-    setResult(null);
-
-    try {
-      const res = await fetch("/api/meta-analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Meta analysis failed");
-      }
-
-      const data: MetaAnalysisResult = await res.json();
-      setResult(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
-    fetchMetaAnalysis();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    async function loadCachedAnalysis() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const res = await fetch(
+          `/api/meta-analyze?username=${encodeURIComponent(username)}`
+        );
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Failed to load coaching report");
+        }
+
+        const data: MetaAnalysisResult = await res.json();
+        setResult(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Something went wrong");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadCachedAnalysis();
   }, [username]);
 
   return (
@@ -65,7 +61,7 @@ export default function MetaAnalysisPage() {
       {loading && (
         <div>
           <p className="mb-4 text-center text-gray-400">
-            Coach is reviewing your game history&hellip;
+            Loading coaching report&hellip;
           </p>
           <MetaAnalysisSkeleton />
         </div>
@@ -74,12 +70,6 @@ export default function MetaAnalysisPage() {
       {error && (
         <div className="mb-4 rounded-lg bg-red-900/30 px-4 py-3 text-accent-red">
           <p>{error}</p>
-          <button
-            onClick={fetchMetaAnalysis}
-            className="mt-2 text-sm font-medium text-accent-blue"
-          >
-            Try again
-          </button>
         </div>
       )}
 

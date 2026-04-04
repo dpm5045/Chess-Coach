@@ -35,6 +35,8 @@ export async function setCachedMetaAnalysis(
     await redis.set(metaCacheKey(username, gameUuids), result, {
       ex: 14 * 24 * 60 * 60,
     });
+    // Also update stable "latest" key for the web app
+    await redis.set(`meta:${username.toLowerCase()}:latest`, result);
   } catch {
     // Redis not configured or unavailable — skip silently
   }

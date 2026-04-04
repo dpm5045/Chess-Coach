@@ -228,9 +228,14 @@ async function main() {
     const jsonStr = extractJson(responseText);
     const result = JSON.parse(jsonStr);
 
-    // Write to Redis with 14-day TTL
+    // Write to Redis with 14-day TTL (hash-based key for dedup)
     await redis.set(key, result, { ex: 14 * 24 * 60 * 60 });
     console.log(`  Cached at ${key}`);
+
+    // Also write to stable "latest" key for the web app to read
+    const latestKey = `meta:${username.toLowerCase()}:latest`;
+    await redis.set(latestKey, result);
+    console.log(`  Updated ${latestKey}`);
 
     // Also save locally for reference
     const outPath = path.join(dataDir, `${username}-meta.json`);
