@@ -16,24 +16,53 @@ export default function AnalysisPage() {
   const gameUrl = searchParams.get("game") || "";
 
   const [game, setGame] = useState<ChessComGame | null>(null);
+  const [gameLoading, setGameLoading] = useState(true);
   const { analysis, engineAnalysis, loading, phase, engineProgress, error, checkCache, fetchAnalysis } =
     useCachedAnalysis(gameUrl);
 
   useEffect(() => {
+    // Try sessionStorage first
     const stored = sessionStorage.getItem("selectedGame");
     if (stored) {
       try {
         const parsed: ChessComGame = JSON.parse(stored);
         if (parsed.url === gameUrl) {
           setGame(parsed);
+          setGameLoading(false);
           return;
         }
       } catch {
         // Ignore parse errors
       }
     }
-    setGame(null);
-  }, [gameUrl]);
+
+    // Fallback: fetch from API and find the game by URL
+    if (gameUrl) {
+      fetchGameFromApi();
+    } else {
+      setGameLoading(false);
+    }
+
+    async function fetchGameFromApi() {
+      try {
+        const res = await fetch(`/api/games/${encodeURIComponent(username)}`);
+        if (!res.ok) {
+          setGameLoading(false);
+          return;
+        }
+        const data = await res.json();
+        const found = data.games?.find((g: ChessComGame) => g.url === gameUrl);
+        if (found) {
+          setGame(found);
+          sessionStorage.setItem("selectedGame", JSON.stringify(found));
+        }
+      } catch {
+        // API fetch failed
+      } finally {
+        setGameLoading(false);
+      }
+    }
+  }, [gameUrl, username]);
 
   useEffect(() => {
     if (game && !analysis && !loading) {
@@ -52,6 +81,14 @@ export default function AnalysisPage() {
         >
           Go to search
         </button>
+      </div>
+    );
+  }
+
+  if (gameLoading) {
+    return (
+      <div className="mx-auto max-w-lg md:max-w-2xl px-4 pt-12 text-center">
+        <p className="text-gray-400">Loading game data&hellip;</p>
       </div>
     );
   }
