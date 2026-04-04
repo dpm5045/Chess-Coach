@@ -22,10 +22,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!isAllowedUser(username)) {
-      return Response.json({ error: "Player not available" }, { status: 403 });
-    }
-
     // Check server-side cache first to avoid redundant Claude API calls
     const cached = await getCachedAnalysis(pgn);
     if (cached) {
@@ -35,6 +31,10 @@ export async function POST(request: NextRequest) {
     // If cache-only mode, don't call Claude — just report the miss
     if (cacheOnly) {
       return Response.json(null, { status: 204 });
+    }
+
+    if (!isAllowedUser(username)) {
+      return Response.json({ error: "Player not available" }, { status: 403 });
     }
 
     const analysis = await analyzeGame(pgn, username, color, rating || 1000, engineEvals);
