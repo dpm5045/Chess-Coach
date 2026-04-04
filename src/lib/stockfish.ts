@@ -18,12 +18,9 @@ export async function evaluateGame(
   const worker = new Worker("/stockfish.wasm.js");
 
   try {
-    // Wait for engine to be ready
     await uciReady(worker);
 
-    // Configure engine
-    worker.postMessage("setoption name Threads value 1");
-    worker.postMessage("setoption name Hash value 16");
+    // Skip setoption — WASM build has Threads=1, Hash=16 locked
     worker.postMessage("isready");
     await waitForLine(worker, (line) => line === "readyok");
 
@@ -77,15 +74,22 @@ function uciReady(worker: Worker): Promise<void> {
   });
 }
 
-/** Wait for a specific line from the worker */
+/** Wait for a specific line from the worker (with timeout) */
 function waitForLine(
   worker: Worker,
-  predicate: (line: string) => boolean
+  predicate: (line: string) => boolean,
+  timeoutMs = 15000
 ): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      worker.removeEventListener("message", handler);
+      reject(new Error("waitForLine timed out"));
+    }, timeoutMs);
+
     function handler(e: MessageEvent) {
       const line = typeof e.data === "string" ? e.data : "";
       if (predicate(line)) {
+        clearTimeout(timeout);
         worker.removeEventListener("message", handler);
         resolve();
       }
