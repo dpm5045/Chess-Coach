@@ -22,6 +22,13 @@ Even if the player won, flag these as "missed_tactic" critical moments. Converti
 
 ENGINE EVALUATIONS: You may receive Stockfish engine evaluations for each position. When provided, USE THEM as your primary source of truth for identifying mistakes and missed opportunities. The engine eval (in centipawns) tells you objectively how good each move was. A drop of 50+ centipawns is an inaccuracy, 100+ is a mistake, 200+ is a blunder. Reference the engine's preferred move when suggesting alternatives. Do NOT contradict the engine evaluation — if the engine says a move lost 150cp, do not call it "solid" or "fine".
 
+MATE SCORES — STRICT ACCURACY REQUIRED: When the engine shows "mate in N", this is a precise calculation — forced checkmate in exactly N moves with best play. You MUST report this accurately:
+- Only say "mate in 1" if the engine literally shows "mate in 1" for that position. Do NOT infer or guess that a position is "mate in 1" from the board — trust the engine number.
+- If the engine shows "mate in 5", say the player missed a forced checkmate in 5 moves, not "missed mate in 1".
+- When describing a missed mate sequence, include the engine's recommended line of play (the continuation moves provided) so the player can study the full mating idea. Walk through the key moves briefly — e.g. "After Rxh8+ Kd7, the engine continues with Qd3+ Ke6 Qd5# — a forced mate in 3."
+- If no mate score is shown by the engine, do NOT claim a checkmate existed. You may say the position was "winning" or give the centipawn advantage instead.
+- NEVER calculate checkmate sequences yourself. Only reference mate-in-N when the engine data explicitly provides it.
+
 You will receive a PGN of a chess game and information about which player you are coaching. Analyze the game and respond with ONLY valid JSON (no markdown, no code fences, no text outside the JSON) matching this exact schema:
 
 {
@@ -82,7 +89,8 @@ ${fenList}`;
       .map((p) => {
         const score = p.mate !== null ? `mate in ${p.mate}` : `${p.scoreCp}cp`;
         const moveLabel = `${p.moveNumber}${p.color === "w" ? "." : "..."} ${p.san}`;
-        return `${moveLabel} → eval: ${score} (depth ${p.depth})`;
+        const line = p.bestLine.length > 0 ? ` [engine line: ${p.bestLine.join(" ")}]` : "";
+        return `${moveLabel} → eval: ${score} (depth ${p.depth})${line}`;
       })
       .join("\n");
 
@@ -92,7 +100,8 @@ ${fenList}`;
       const dropList = engineEvals.drops
         .map((d) => {
           const moveLabel = `${d.moveNumber}${d.color === "w" ? "." : "..."} ${d.san}`;
-          return `${moveLabel}: lost ${d.cpLoss}cp (was ${d.evalBefore}cp, now ${d.evalAfter}cp). Engine preferred: ${d.engineBest}`;
+          const line = d.engineLine.length > 1 ? ` (continuation: ${d.engineLine.join(" ")})` : "";
+          return `${moveLabel}: lost ${d.cpLoss}cp (was ${d.evalBefore}cp, now ${d.evalAfter}cp). Engine preferred: ${d.engineBest}${line}`;
         })
         .join("\n");
 
