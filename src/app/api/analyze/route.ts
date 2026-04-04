@@ -4,13 +4,6 @@ import { isAllowedUser } from "@/lib/chess-com";
 import { getCachedAnalysis, setCachedAnalysis } from "@/lib/analysis-cache";
 
 export async function POST(request: NextRequest) {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return Response.json(
-      { error: "ANTHROPIC_API_KEY not configured" },
-      { status: 500 }
-    );
-  }
-
   try {
     const body = await request.json();
     const { pgn, username, color, rating, cacheOnly, engineEvals } = body;
@@ -30,11 +23,18 @@ export async function POST(request: NextRequest) {
 
     // If cache-only mode, don't call Claude — just report the miss
     if (cacheOnly) {
-      return Response.json(null, { status: 204 });
+      return new Response(null, { status: 204 });
     }
 
     if (!isAllowedUser(username)) {
       return Response.json({ error: "Player not available" }, { status: 403 });
+    }
+
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return Response.json(
+        { error: "ANTHROPIC_API_KEY not configured" },
+        { status: 500 }
+      );
     }
 
     const analysis = await analyzeGame(pgn, username, color, rating || 1000, engineEvals);
