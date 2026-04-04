@@ -14,7 +14,7 @@ const TARGET_DEPTH = 16;
 
 function initEngine() {
   try {
-    importScripts("https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js");
+    importScripts("/stockfish.js");
 
     const sf = (self as any).STOCKFISH?.() || (self as any).Stockfish?.();
     if (!sf) {
