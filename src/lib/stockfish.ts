@@ -15,7 +15,7 @@ export async function evaluateGame(
   moves: MoveDetail[],
   onProgress?: (completed: number, total: number) => void
 ): Promise<EngineAnalysis> {
-  const worker = new Worker("/stockfish.js");
+  const worker = new Worker("/stockfish.wasm.js");
 
   try {
     // Wait for engine to be ready
