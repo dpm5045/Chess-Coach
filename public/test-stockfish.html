@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head><title>Stockfish Test</title></head>
+<body>
+<h2>Stockfish Worker Test</h2>
+<pre id="log" style="background:#111;color:#0f0;padding:1rem;font-size:14px;max-height:80vh;overflow:auto;"></pre>
+<script>
+const log = document.getElementById('log');
+function print(msg) {
+  log.textContent += msg + '\n';
+  log.scrollTop = log.scrollHeight;
+  console.log(msg);
+}
+
+print('Creating worker from /stockfish.wasm.js ...');
+const worker = new Worker('/stockfish.wasm.js');
+
+worker.addEventListener('message', (e) => {
+  print('[MSG] ' + JSON.stringify(e.data));
+});
+
+worker.addEventListener('error', (e) => {
+  print('[ERR] ' + e.message + ' at ' + e.filename + ':' + e.lineno);
+});
+
+worker.addEventListener('messageerror', (e) => {
+  print('[MSG_ERR] ' + JSON.stringify(e));
+});
+
+print('Worker created. Sending "uci" ...');
+worker.postMessage('uci');
+
+setTimeout(() => {
+  print('--- 5s timeout: sending "isready" ---');
+  worker.postMessage('isready');
+}, 5000);
+
+setTimeout(() => {
+  print('--- 10s timeout: sending "go depth 5" with startpos ---');
+  worker.postMessage('position startpos');
+  worker.postMessage('go depth 5');
+}, 10000);
+
+setTimeout(() => {
+  print('--- 20s timeout: no more messages expected. Test complete. ---');
+}, 20000);
+</script>
+</body>
+</html>
