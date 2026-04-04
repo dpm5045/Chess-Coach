@@ -86,6 +86,9 @@ export function useCachedAnalysis(gameUrl: string) {
 
       if (!evals) {
         const moves = getAllMoves(pgn);
+        if (moves.length === 0) {
+          throw new Error("Could not parse game moves. The PGN may be empty or invalid.");
+        }
         evals = await evaluateGame(moves, (completed, total) => {
           setEngineProgress({ completed, total });
         });
