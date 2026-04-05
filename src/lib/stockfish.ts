@@ -1,3 +1,4 @@
+import { Chess } from "chess.js";
 import { MoveDetail } from "./chess-utils";
 import { PositionEval, EngineAnalysis, EvalDrop } from "./types";
 
@@ -29,7 +30,11 @@ export async function evaluateGame(
 
     for (let i = 0; i < moves.length; i++) {
       const move = moves[i];
-      const result = await evaluatePosition(worker, move.fen);
+
+      // Detect terminal positions (checkmate/stalemate) — Stockfish cannot
+      // search these and will time out.  Return the known eval directly.
+      const terminal = getTerminalEval(move.fen);
+      const result = terminal ?? (await evaluatePosition(worker, move.fen));
 
       positions.push({
         moveNumber: move.moveNumber,
@@ -103,6 +108,28 @@ interface EvalResult {
   mate: number | null;
   bestLine: string[];
   depth: number;
+}
+
+/**
+ * Check if a FEN represents a terminal position (checkmate or stalemate).
+ * Returns a synthetic EvalResult if terminal, or null if the position needs
+ * engine analysis.
+ */
+function getTerminalEval(fen: string): EvalResult | null {
+  try {
+    const chess = new Chess(fen);
+    if (!chess.isGameOver()) return null;
+
+    if (chess.isCheckmate()) {
+      // The side to move is checkmated → score from their perspective is mate 0
+      return { scoreCp: 0, mate: 0, bestLine: [], depth: TARGET_DEPTH };
+    }
+
+    // Stalemate or other draw
+    return { scoreCp: 0, mate: null, bestLine: [], depth: TARGET_DEPTH };
+  } catch {
+    return null;
+  }
 }
 
 /** Evaluate a single FEN position to TARGET_DEPTH */
