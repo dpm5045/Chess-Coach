@@ -104,6 +104,16 @@ async function evalPosition(fen: string): Promise<{ scoreCp: number; mate: numbe
   return parseResult(collectedLines);
 }
 
+/** Return a synthetic eval for checkmate/stalemate/draw positions */
+function getTerminalEval(fen: string): { scoreCp: number; mate: number | null; bestLine: string[]; depth: number } | null {
+  try {
+    const chess = new Chess(fen);
+    if (chess.isCheckmate()) return { scoreCp: 0, mate: 0, bestLine: [], depth: TARGET_DEPTH };
+    if (chess.isStalemate() || chess.isDraw()) return { scoreCp: 0, mate: null, bestLine: [], depth: TARGET_DEPTH };
+  } catch { /* invalid FEN — let engine handle */ }
+  return null;
+}
+
 // --- Helpers ---
 
 function getRedis(): Redis {
@@ -219,6 +229,12 @@ async function evaluateGame(moves: MoveDetail[]): Promise<{ positions: PositionE
   const positions: PositionEval[] = [];
 
   for (const move of moves) {
+    const terminal = getTerminalEval(move.fen);
+    if (terminal) {
+      positions.push({ moveNumber: move.moveNumber, color: move.color, san: move.san, ...terminal });
+      continue;
+    }
+
     const result = await evalPosition(move.fen);
     positions.push({
       moveNumber: move.moveNumber,
