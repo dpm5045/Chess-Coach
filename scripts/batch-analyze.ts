@@ -202,11 +202,6 @@ function uciLineToSan(fen: string, uciMoves: string[]): string[] {
 /**
  * Get the FEN position BEFORE a move was played (the decision point).
  */
-function getFenBeforeMove(moves: MoveDetail[], moveIndex: number): string {
-  if (moveIndex === 0) return "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-  return moves[moveIndex - 1].fen;
-}
-
 // --- Move Validation ---
 
 function isLegalMoveAt(fen: string, san: string): boolean {
@@ -257,15 +252,8 @@ async function evaluateGame(moves: MoveDetail[]): Promise<{ positions: PositionE
     const cpLoss = prevScore - currScore;
 
     if (cpLoss >= CP_DROP_THRESHOLD) {
-      // Convert engine's best move from UCI to SAN
-      const fenBefore = getFenBeforeMove(positions.map((p, idx) => ({
-        moveNumber: p.moveNumber, color: p.color, san: p.san,
-        from: "", to: "", fen: idx > 0 ? positions[idx - 1].fen ?? "" : "",
-      })), i);
-      // Actually we need the FEN before the current move — that's the position
-      // where the player was deciding. Use the moves array to find it.
-      const moveIdx = i; // positions[i] corresponds to moves[i]
-      const decisionFen = moveIdx > 0 ? moves[moveIdx - 1].fen : "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+      // FEN before the current move — the position where the player was deciding
+      const decisionFen = i > 0 ? moves[i - 1].fen : "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
       const bestSan = prev.bestLine.length > 0 ? uciToSan(decisionFen, prev.bestLine[0]) : null;
       const lineSan = prev.bestLine.length > 0 ? uciLineToSan(decisionFen, prev.bestLine) : [];
@@ -356,7 +344,7 @@ function generateAnalysis(
     const moveIdx = moves.findIndex(m => m.moveNumber === drop.moveNumber && m.color === drop.color);
     const prevEval = moveIdx > 0 ? evals.positions[moveIdx - 1] : null;
 
-    if (prevEval?.mate !== null && Math.abs(prevEval.mate) <= 10) {
+    if (prevEval != null && prevEval.mate !== null && Math.abs(prevEval.mate) <= 10) {
       // There was a forced mate available
       const mateIn = Math.abs(prevEval.mate);
       const lineStr = drop.engineLine.length > 0 ? ` The winning sequence was: ${drop.engineLine.join(", ")}.` : "";
