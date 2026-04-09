@@ -173,8 +173,8 @@ async function main() {
     let cachedCount = 0;
 
     for (const game of games) {
-      const color = getPlayerColor(game, username);
-      const outcome = getPlayerOutcome(game, username);
+      const color = getPlayerColor(game as never, username);
+      const outcome = getPlayerOutcome(game as never, username);
       const opp = color === "white" ? game.black : game.white;
       const playerRating = game[color].rating;
       const date = formatDate(game.end_time);
@@ -196,7 +196,7 @@ async function main() {
 
     console.log(`  ${cachedCount}/${games.length} games had cached analyses`);
 
-    const latestColor = getPlayerColor(games[0], username);
+    const latestColor = getPlayerColor(games[0] as never, username);
     const currentRating = games[0][latestColor].rating;
     const gamesSummary = sections.join("\n\n");
 
