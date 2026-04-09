@@ -46,6 +46,7 @@ interface AnalysisResult {
   positionalThemes: string;
   endgame: { reached: boolean; comment: string; };
   summary: { overallAssessment: string; focusArea: string; };
+  missedMatesInOne?: Array<{ moveNumber: number; color: "w" | "b"; playedSan: string; mateSan: string; }>;
 }
 
 // --- Stockfish Engine ---
@@ -220,7 +221,7 @@ function getLegalMovesAt(fen: string, exclude?: string): string[] {
 
 // --- Engine Evaluation ---
 
-async function evaluateGame(moves: MoveDetail[]): Promise<{ positions: PositionEval[]; drops: EvalDrop[] }> {
+async function evaluateGame(moves: MoveDetail[]): Promise<{ positions: PositionEval[]; drops: EvalDrop[]; missedMatesInOne: Array<{ moveNumber: number; color: "w" | "b"; playedSan: string; mateSan: string }> }> {
   const positions: PositionEval[] = [];
 
   for (const move of moves) {
@@ -240,6 +241,35 @@ async function evaluateGame(moves: MoveDetail[]): Promise<{ positions: PositionE
       bestLine: result.bestLine,
       depth: result.depth,
     });
+  }
+
+  // Detect missed mate-in-1 opportunities
+  const missedMatesInOne: Array<{ moveNumber: number; color: "w" | "b"; playedSan: string; mateSan: string }> = [];
+  for (let i = 1; i < positions.length; i++) {
+    const prev = positions[i - 1];
+    const curr = positions[i];
+    // prev is eval AFTER the opponent's move = side-to-move is curr's color
+    // prev.mate === 1 means the side about to play has forced mate in 1
+    if (prev.mate === 1) {
+      // Check if the move actually played delivered checkmate
+      const resultingFen = moves[i].fen;
+      try {
+        const chess = new Chess(resultingFen);
+        if (!chess.isCheckmate()) {
+          // Player had mate in 1 but didn't play it
+          const decisionFen = moves[i - 1].fen;
+          const mateSan = prev.bestLine.length > 0 ? uciToSan(decisionFen, prev.bestLine[0]) : null;
+          if (mateSan) {
+            missedMatesInOne.push({
+              moveNumber: curr.moveNumber,
+              color: curr.color,
+              playedSan: curr.san,
+              mateSan,
+            });
+          }
+        }
+      } catch { /* invalid FEN — skip */ }
+    }
   }
 
   const drops: EvalDrop[] = [];
@@ -266,7 +296,7 @@ async function evaluateGame(moves: MoveDetail[]): Promise<{ positions: PositionE
     }
   }
 
-  return { positions, drops };
+  return { positions, drops, missedMatesInOne };
 }
 
 // --- Analysis Generation (template-based, no API) ---
@@ -291,7 +321,7 @@ function formatScore(scoreCp: number, mate: number | null): string {
 
 function generateAnalysis(
   pgn: string, moves: MoveDetail[],
-  evals: { positions: PositionEval[]; drops: EvalDrop[] },
+  evals: { positions: PositionEval[]; drops: EvalDrop[]; missedMatesInOne: Array<{ moveNumber: number; color: "w" | "b"; playedSan: string; mateSan: string }> },
   username: string, color: "white" | "black", rating: number,
   opponentName: string, result: string
 ): { analysis: AnalysisResult; fixes: number } {
@@ -445,6 +475,9 @@ function generateAnalysis(
     endgameReached && endgameComment.includes("issues") ? "Endgame technique: practice king activity and passed pawn conversion." :
     "Consistency: your play is improving — maintain this accuracy across all phases.";
 
+  const playerColorChar = color === "white" ? "w" : "b";
+  const playerMissedMates = evals.missedMatesInOne.filter(m => m.color === (playerColorChar as "w" | "b"));
+
   return {
     analysis: {
       opening: { name: openingName, assessment: openingAssessment, comment: openingComment },
@@ -452,6 +485,7 @@ function generateAnalysis(
       positionalThemes: themes,
       endgame: { reached: endgameReached, comment: endgameComment },
       summary: { overallAssessment, focusArea },
+      missedMatesInOne: playerMissedMates.length > 0 ? playerMissedMates : undefined,
     },
     fixes,
   };
@@ -547,7 +581,8 @@ async function main() {
         const playerChar = color === "white" ? "w" : "b";
         const blunders = engineEvals.drops.filter(d => d.color === playerChar && d.cpLoss >= 200).length;
         const mistakes = engineEvals.drops.filter(d => d.color === playerChar && d.cpLoss >= 100 && d.cpLoss < 200).length;
-        log(`    OK ${moves.length} moves, ${blunders}B ${mistakes}M${fixes > 0 ? `, ${fixes} suggestion fixes` : ""} — ${analysis.opening.name}`);
+        const missedMateCount = analysis.missedMatesInOne?.length ?? 0;
+        log(`    OK ${moves.length} moves, ${blunders}B ${mistakes}M${missedMateCount > 0 ? ` ${missedMateCount}MM1` : ""}${fixes > 0 ? `, ${fixes} suggestion fixes` : ""} — ${analysis.opening.name}`);
       } catch (err) {
         log(`    FAIL: ${err instanceof Error ? err.message : err}`);
       }
