@@ -1,4 +1,7 @@
-import { MetaAnalysisResult, MetaTheme } from "@/lib/types";
+"use client";
+
+import { useRouter } from "next/navigation";
+import { MetaAnalysisResult, MetaTheme, MissedMateInOneEntry, ChessComGame } from "@/lib/types";
 
 const FREQUENCY_STYLES: Record<string, string> = {
   consistent: "bg-accent-blue/20 text-accent-blue",
@@ -46,6 +49,70 @@ function ThemeCard({
   );
 }
 
+function MissedMateCard({
+  entry,
+  username,
+}: {
+  entry: MissedMateInOneEntry;
+  username: string;
+}) {
+  const router = useRouter();
+
+  const displayDate = new Date(entry.date + "T00:00:00").toLocaleDateString(
+    "en-US",
+    { month: "short", day: "numeric" }
+  );
+
+  const moveNotation =
+    entry.firstMiss.color === "w"
+      ? `${entry.firstMiss.moveNumber}. ${entry.firstMiss.mateSan}`
+      : `${entry.firstMiss.moveNumber}... ${entry.firstMiss.mateSan}`;
+
+  async function handleClick() {
+    try {
+      const res = await fetch(
+        `/api/games/${encodeURIComponent(username)}`
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      const game = data.games.find(
+        (g: ChessComGame) => g.url === entry.gameUrl
+      );
+      if (!game) return;
+      sessionStorage.setItem("selectedGame", JSON.stringify(game));
+      router.push(
+        `/analysis/${encodeURIComponent(username)}?game=${encodeURIComponent(entry.gameUrl)}`
+      );
+    } catch {
+      /* silently fail */
+    }
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      className="w-full rounded-xl bg-surface-card p-4 border-l-4 border-accent-red text-left transition hover:bg-surface-card/80"
+    >
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-sm font-semibold">
+          {entry.timeClass} vs {entry.opponent}
+        </span>
+        <span className="text-xs text-gray-500">
+          {displayDate} &middot; {entry.result}
+        </span>
+      </div>
+      <p className="text-sm text-gray-300">
+        missed {moveNotation} (you played {entry.firstMiss.playedSan})
+      </p>
+      {entry.missCount > 1 && (
+        <p className="text-xs text-gray-500 text-right mt-1">
+          &times; {entry.missCount} misses
+        </p>
+      )}
+    </button>
+  );
+}
+
 export function MetaAnalysisView({ data }: { data: MetaAnalysisResult }) {
   return (
     <div className="space-y-6">
@@ -88,6 +155,24 @@ export function MetaAnalysisView({ data }: { data: MetaAnalysisResult }) {
                 key={i}
                 theme={theme}
                 accentBorder="border-accent-orange"
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Missed Mate in 1 */}
+      {data.missedMatesInOne && data.missedMatesInOne.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold uppercase text-gray-400 mb-3">
+            Doh..You Had Mate in 1
+          </h2>
+          <div className="space-y-2">
+            {data.missedMatesInOne.map((entry) => (
+              <MissedMateCard
+                key={entry.gameUrl}
+                entry={entry}
+                username={data.playerUsername}
               />
             ))}
           </div>
