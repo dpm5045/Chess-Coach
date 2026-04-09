@@ -1,31 +1,23 @@
 import { isAllowedUser, getPlayerColor, getPlayerOutcome } from "@/lib/chess-com";
 import { getRedis, analysisCacheKey } from "@/lib/analysis-cache";
-import { MetaAnalysisResult, ChessComGame, MissedMateInOneEntry, AnalysisResult, TimeClass } from "@/lib/types";
+import { getAllGames } from "@/lib/game-cache";
+import { MetaAnalysisResult, MissedMateInOneEntry, AnalysisResult, TimeClass } from "@/lib/types";
 
 async function composeMissedMates(
   redis: NonNullable<ReturnType<typeof getRedis>>,
   username: string
 ): Promise<MissedMateInOneEntry[]> {
-  // Load cached archives list
-  const archives = await redis.get<string[]>(`archives:${username.toLowerCase()}`);
-  if (!archives || archives.length === 0) return [];
+  // Use the shared self-healing game cache. It checks Redis first and
+  // refetches from Chess.com on miss, so we don't silently break when the
+  // short-lived archives/current-month keys expire.
+  let allGames;
+  try {
+    allGames = await getAllGames(username, 3);
+  } catch {
+    return [];
+  }
 
-  // Take last 3 months (matches batch-analyze window)
-  const recentArchives = archives.slice(-3);
-
-  // Load games from each month
-  const gameKeys = recentArchives.map((url) => {
-    const parts = url.split("/");
-    const year = parts[parts.length - 2];
-    const month = parts[parts.length - 1];
-    return `games:${username.toLowerCase()}:${year}/${month}`;
-  });
-
-  const gameLists = await Promise.all(
-    gameKeys.map((key) => redis.get<ChessComGame[]>(key))
-  );
-
-  const allGames = gameLists.flat().filter((g): g is ChessComGame => g !== null && g !== undefined);
+  if (allGames.length === 0) return [];
 
   // Filter to losses and draws
   const lostOrDrawn = allGames.filter((game) => {
