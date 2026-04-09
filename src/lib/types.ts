@@ -94,6 +94,7 @@ export interface AnalysisResult {
     overallAssessment: string;
     focusArea: string;
   };
+  missedMatesInOne?: MissedMateInOne[];
 }
 
 export interface CriticalMoment {
@@ -102,6 +103,23 @@ export interface CriticalMoment {
   type: "blunder" | "mistake" | "excellent" | "missed_tactic";
   comment: string;
   suggestion?: string;
+}
+
+export interface MissedMateInOne {
+  moveNumber: number;
+  color: "w" | "b";
+  playedSan: string;
+  mateSan: string;
+}
+
+export interface MissedMateInOneEntry {
+  gameUrl: string;
+  opponent: string;
+  date: string;
+  timeClass: TimeClass;
+  result: "loss" | "draw";
+  missCount: number;
+  firstMiss: MissedMateInOne;
 }
 
 // Engine evaluation types
@@ -163,4 +181,5 @@ export interface MetaAnalysisResult {
   };
   endgameTendency: string;
   coachingPlan: string[];
+  missedMatesInOne?: MissedMateInOneEntry[];
 }
