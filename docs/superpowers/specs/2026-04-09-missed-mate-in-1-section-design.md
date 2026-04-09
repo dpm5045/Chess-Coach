@@ -52,13 +52,15 @@ The LLM-generated meta analysis (`backfill-meta.ts`) is **not** modified. The mi
 
 ### Rule
 
-For each `i` in `positions` where `positions[i].color === playerColor`:
+For each `i >= 1` in `positions` where `positions[i].color === playerColor`:
 
-- Let `prev = positions[i-1]` (the position *before* the player's move — the decision point).
-- If `prev.mate === 1` (the mover had forced mate in one), and
+- Let `prev = positions[i-1]` (the eval after the opponent's previous move — i.e. the position *before* the user's move, which is the decision point). Since Stockfish reports mate scores from the side-to-move's perspective, `prev.mate` is already from the user's perspective.
+- If `prev.mate === 1` (the user had forced mate in one), and
 - The move actually played (`positions[i].san`) did **not** deliver checkmate:
 
 ...then this is a missed-mate-in-1 moment.
+
+The `i >= 1` guard is technically redundant (mate in 1 is impossible from the starting position) but makes the index safety explicit.
 
 **Determining "did not deliver checkmate":** use `chess.js` on the resulting FEN from `moves[i].fen` — `new Chess(fen).isCheckmate()` returns `false`. This is more reliable than inspecting `positions[i].mate`, since `mate === 0` is the checkmate sentinel used by `getTerminalEval` but the engine can also return other values for the resulting position.
 
