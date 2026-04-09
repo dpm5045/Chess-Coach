@@ -3,6 +3,7 @@ import { createHash } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import Anthropic from "@anthropic-ai/sdk";
+import { getPlayerColor, getPlayerOutcome } from "../src/lib/chess-com";
 
 const USERS = ["castledoon", "exstrax"];
 const MAX_GAMES = 50;
@@ -57,17 +58,6 @@ function metaCacheKey(username: string, gameUuids: string[]): string {
   return `meta:${username.toLowerCase()}:${hash}`;
 }
 
-function getPlayerColor(game: ChessComGame, username: string): "white" | "black" {
-  return game.white.username.toLowerCase() === username.toLowerCase() ? "white" : "black";
-}
-
-function getPlayerOutcome(game: ChessComGame, username: string): string {
-  const color = getPlayerColor(game, username);
-  const result = game[color].result;
-  if (result === "win") return "win";
-  if (["stalemate", "insufficient", "repetition", "agreed", "50move", "timevsinsufficient"].includes(result)) return "draw";
-  return "loss";
-}
 
 function formatDate(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleDateString("en-US", {

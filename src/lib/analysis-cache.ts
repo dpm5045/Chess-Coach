@@ -18,7 +18,7 @@ export function getRedis(): Redis | null {
  * We strip PGN headers/whitespace so that the same game always hashes
  * the same regardless of minor formatting differences.
  */
-function cacheKey(pgn: string): string {
+export function analysisCacheKey(pgn: string): string {
   const moves = pgn
     .replace(/\[.*?\]\s*/g, "")
     .replace(/\s+/g, " ")
@@ -37,7 +37,7 @@ export async function getCachedAnalysis(
   try {
     const redis = getRedis();
     if (!redis) return null;
-    const result = await redis.get<AnalysisResult>(cacheKey(pgn));
+    const result = await redis.get<AnalysisResult>(analysisCacheKey(pgn));
     return result ?? null;
   } catch {
     return null;
@@ -55,7 +55,7 @@ export async function setCachedAnalysis(
   try {
     const redis = getRedis();
     if (!redis) return;
-    await redis.set(cacheKey(pgn), analysis, { ex: 90 * 24 * 60 * 60 });
+    await redis.set(analysisCacheKey(pgn), analysis, { ex: 90 * 24 * 60 * 60 });
   } catch {
     // Redis not configured or unavailable — skip silently
   }

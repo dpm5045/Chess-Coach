@@ -45,3 +45,33 @@ export async function fetchGamesFromArchive(
   const data = (await res.json()) as { games: ChessComGame[] };
   return data.games;
 }
+
+export function getPlayerColor(
+  game: ChessComGame,
+  username: string
+): "white" | "black" {
+  return game.white.username.toLowerCase() === username.toLowerCase()
+    ? "white"
+    : "black";
+}
+
+export function getPlayerOutcome(
+  game: ChessComGame,
+  username: string
+): "win" | "draw" | "loss" {
+  const color = getPlayerColor(game, username);
+  const result = game[color].result;
+  if (result === "win") return "win";
+  if (
+    [
+      "stalemate",
+      "insufficient",
+      "repetition",
+      "agreed",
+      "50move",
+      "timevsinsufficient",
+    ].includes(result)
+  )
+    return "draw";
+  return "loss";
+}
