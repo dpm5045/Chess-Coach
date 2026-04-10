@@ -190,3 +190,114 @@ export function classifyBattle(features: BattleShapeFeatures): BattleAllusion {
   // Rule 11: default loss
   return BATTLES.fall_of_france;
 }
+
+// --- Feature extraction (rich mode) ---
+
+type EnginePos = {
+  moveNumber: number;
+  color: "w" | "b";
+  scoreCp: number;
+  mate: number | null;
+};
+type EngineDrop = {
+  color: "w" | "b";
+  cpLoss: number;
+};
+
+interface EngineEvalsLike {
+  positions: EnginePos[];
+  drops: EngineDrop[];
+}
+
+/**
+ * Convert a raw engine score (with optional mate) to a signed centipawn
+ * value from WHITE's perspective, clamped to ±1000 so mate scores don't
+ * distort running min/max calculations.
+ */
+function normalizedScoreWhitePov(pos: EnginePos): number {
+  if (pos.mate !== null) {
+    // mate > 0 means the side to move is mating; mate < 0 means being mated.
+    // By convention in this codebase, positive mate on white's move = white
+    // mates. We clamp to ±1000 to avoid distorting swings.
+    const sign = pos.mate > 0 ? 1 : pos.mate < 0 ? -1 : 0;
+    return sign * 1000;
+  }
+  return pos.scoreCp;
+}
+
+/**
+ * Extract BattleShapeFeatures from a full engine analysis. Called from
+ * batch-analyze and the runtime Claude path — both have engineEvals.
+ */
+export function buildFeaturesFromEngineEvals(
+  evals: EngineEvalsLike,
+  playerColor: "w" | "b",
+  result: "win" | "loss" | "draw",
+  openingAssessment: "good" | "inaccurate" | "dubious",
+  endgameReached: boolean,
+  opts: { missedMate?: boolean } = {}
+): BattleShapeFeatures {
+  const positions = evals.positions;
+  const totalMoves = positions.length;
+
+  // evalAtMove10: position after both sides' 10th move = index 19.
+  // Normalize to player's perspective.
+  let evalAtMove10: number | undefined;
+  if (positions.length > 19) {
+    const raw = normalizedScoreWhitePov(positions[19]);
+    evalAtMove10 = playerColor === "w" ? raw : -raw;
+  }
+
+  // Walk positions tracking running min/max from the player's perspective.
+  // comebackSwingCp: deepest deficit that was later recovered to >= 0.
+  // collapseSwingCp: peak advantage that was later lost to <= 0.
+  let runningMin = Infinity;
+  let runningMax = -Infinity;
+  let finalEval = 0;
+  for (const p of positions) {
+    const whitePov = normalizedScoreWhitePov(p);
+    const playerPov = playerColor === "w" ? whitePov : -whitePov;
+    if (playerPov < runningMin) runningMin = playerPov;
+    if (playerPov > runningMax) runningMax = playerPov;
+    finalEval = playerPov;
+  }
+
+  let comebackSwingCp: number | undefined;
+  if (runningMin < 0 && finalEval >= 0) {
+    comebackSwingCp = -runningMin;
+  }
+
+  let collapseSwingCp: number | undefined;
+  if (runningMax > 0 && finalEval <= 0) {
+    collapseSwingCp = runningMax;
+  }
+
+  // Count drops by color and severity.
+  // Threshold: >=200cp = blunder, 100..199cp = mistake.
+  const opponentColor = playerColor === "w" ? "b" : "w";
+  let playerBlunders = 0;
+  let playerMistakes = 0;
+  let opponentBlunders = 0;
+  for (const d of evals.drops) {
+    if (d.color === playerColor) {
+      if (d.cpLoss >= 200) playerBlunders++;
+      else if (d.cpLoss >= 100) playerMistakes++;
+    } else if (d.color === opponentColor) {
+      if (d.cpLoss >= 200) opponentBlunders++;
+    }
+  }
+
+  return {
+    result,
+    totalMoves,
+    playerBlunders,
+    playerMistakes,
+    openingAssessment,
+    missedMate: opts.missedMate ?? false,
+    endgameReached,
+    opponentBlunders,
+    comebackSwingCp,
+    collapseSwingCp,
+    evalAtMove10,
+  };
+}

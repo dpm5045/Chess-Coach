@@ -8,6 +8,7 @@ import { strict as assert } from "node:assert";
 import {
   classifyBattle,
   BATTLES,
+  buildFeaturesFromEngineEvals,
   type BattleShapeFeatures,
 } from "../src/lib/battle-allusion";
 
@@ -171,6 +172,212 @@ test("rule 1 fires before rule 7 (missed mate beats Blitzkrieg)", () => {
     })
   );
   assert.equal(r, BATTLES.iwo_jima);
+});
+
+console.log("\n=== buildFeaturesFromEngineEvals ===");
+
+// Minimal shape matching the engineEvals passed around the codebase.
+type EvalPos = {
+  moveNumber: number;
+  color: "w" | "b";
+  san: string;
+  scoreCp: number;
+  mate: number | null;
+  bestLine: string[];
+  depth: number;
+};
+type EvalDrop = {
+  moveNumber: number;
+  color: "w" | "b";
+  san: string;
+  evalBefore: number;
+  evalAfter: number;
+  cpLoss: number;
+  engineBest: string;
+  engineLine: string[];
+};
+
+function pos(
+  i: number,
+  color: "w" | "b",
+  scoreCp: number,
+  mate: number | null = null
+): EvalPos {
+  return {
+    moveNumber: Math.floor(i / 2) + 1,
+    color,
+    san: "a1",
+    scoreCp,
+    mate,
+    bestLine: [],
+    depth: 14,
+  };
+}
+
+function drop(
+  color: "w" | "b",
+  cpLoss: number,
+  moveNumber = 15
+): EvalDrop {
+  return {
+    moveNumber,
+    color,
+    san: "a1",
+    evalBefore: 0,
+    evalAfter: 0,
+    cpLoss,
+    engineBest: "",
+    engineLine: [],
+  };
+}
+
+// Build a 40-half-move game where white is the player and starts winning,
+// goes to -400 around move 10, recovers to +500 at the end (comeback).
+function comebackEvals() {
+  const positions: EvalPos[] = [];
+  for (let i = 0; i < 40; i++) {
+    const color = i % 2 === 0 ? "w" : "b";
+    let cp = 0;
+    if (i < 10) cp = 50;
+    else if (i < 20) cp = -400;
+    else if (i < 30) cp = -100;
+    else cp = 500;
+    positions.push(pos(i, color, cp));
+  }
+  return { positions, drops: [] as EvalDrop[] };
+}
+
+test("extracts totalMoves from positions length", () => {
+  const evals = comebackEvals();
+  const f = buildFeaturesFromEngineEvals(
+    evals,
+    "w",
+    "win",
+    "good",
+    true
+  );
+  assert.equal(f.totalMoves, 40);
+});
+
+test("extracts evalAtMove10 from position index 19 (player perspective)", () => {
+  const evals = comebackEvals();
+  const f = buildFeaturesFromEngineEvals(
+    evals,
+    "w",
+    "win",
+    "good",
+    true
+  );
+  // White at index 19: positions[19].scoreCp === -400, already white POV.
+  assert.equal(f.evalAtMove10, -400);
+});
+
+test("evalAtMove10 is negated for black player", () => {
+  const evals = comebackEvals();
+  const f = buildFeaturesFromEngineEvals(
+    evals,
+    "b",
+    "loss",
+    "good",
+    true
+  );
+  assert.equal(f.evalAtMove10, 400);
+});
+
+test("comebackSwingCp detects recovered deficit", () => {
+  const evals = comebackEvals();
+  const f = buildFeaturesFromEngineEvals(
+    evals,
+    "w",
+    "win",
+    "good",
+    true
+  );
+  // Running min was -400 (white POV), final is +500 >= 0 -> comeback = 400.
+  assert(
+    f.comebackSwingCp !== undefined && f.comebackSwingCp >= 400,
+    `expected comebackSwingCp >= 400, got ${f.comebackSwingCp}`
+  );
+  assert.equal(f.collapseSwingCp, undefined);
+});
+
+test("collapseSwingCp detects lost advantage", () => {
+  // Game where white peaks at +600 then drops to -400 (loss).
+  const positions: EvalPos[] = [];
+  for (let i = 0; i < 30; i++) {
+    const color = i % 2 === 0 ? "w" : "b";
+    let cp = 0;
+    if (i < 10) cp = 200;
+    else if (i < 20) cp = 600;
+    else cp = -400;
+    positions.push(pos(i, color, cp));
+  }
+  const f = buildFeaturesFromEngineEvals(
+    { positions, drops: [] },
+    "w",
+    "loss",
+    "good",
+    false
+  );
+  assert(
+    f.collapseSwingCp !== undefined && f.collapseSwingCp >= 600,
+    `expected collapseSwingCp >= 600, got ${f.collapseSwingCp}`
+  );
+  assert.equal(f.comebackSwingCp, undefined);
+});
+
+test("counts player and opponent blunders from drops", () => {
+  const evals = {
+    positions: comebackEvals().positions,
+    drops: [
+      drop("w", 250), // player blunder (>=200)
+      drop("w", 150), // player mistake (100-199)
+      drop("b", 300), // opponent blunder
+      drop("b", 80), // below mistake threshold
+    ],
+  };
+  const f = buildFeaturesFromEngineEvals(
+    evals,
+    "w",
+    "win",
+    "good",
+    true
+  );
+  assert.equal(f.playerBlunders, 1);
+  assert.equal(f.playerMistakes, 1);
+  assert.equal(f.opponentBlunders, 1);
+});
+
+test("mate scores are clamped so swings don't exceed 1000cp", () => {
+  // Game with a mate score in the middle. Even though the engine reports
+  // "mate in 2", the clamped normalized value is ±1000, not ±10000. This
+  // prevents a single mate score from saturating the comeback/collapse
+  // detectors at unrealistic magnitudes.
+  const positions: EvalPos[] = [];
+  for (let i = 0; i < 20; i++) {
+    const color = i % 2 === 0 ? "w" : "b";
+    if (i === 10) {
+      // Engine shows mate in 2 for white at this point.
+      positions.push(pos(i, color, 0, 2));
+    } else if (i < 10) {
+      positions.push(pos(i, color, -300));
+    } else {
+      positions.push(pos(i, color, 400));
+    }
+  }
+  const f = buildFeaturesFromEngineEvals(
+    { positions, drops: [] },
+    "w",
+    "win",
+    "good",
+    false
+  );
+  // White recovered from -300 (not clamped) to a win. comebackSwingCp = 300,
+  // NOT 10000 (which would be the unclamped mate magnitude).
+  assert(
+    f.comebackSwingCp !== undefined && f.comebackSwingCp <= 1000,
+    `expected comebackSwingCp clamped to <= 1000, got ${f.comebackSwingCp}`
+  );
 });
 
 console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILED`}`);
