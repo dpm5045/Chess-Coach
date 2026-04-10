@@ -78,6 +78,12 @@ export interface PlayerProfile {
 
 // Analysis types
 
+export interface BattleAllusion {
+  battleName: string;
+  subtitle: string;
+  flavor: string;
+}
+
 export interface AnalysisResult {
   opening: {
     name: string;
@@ -93,6 +99,7 @@ export interface AnalysisResult {
   summary: {
     overallAssessment: string;
     focusArea: string;
+    battleAllusion?: BattleAllusion;
   };
   missedMatesInOne?: MissedMateInOne[];
 }
