@@ -85,6 +85,12 @@ export type BattleId = keyof typeof BATTLES;
  * Shape features extracted from a game. All "rich-mode only" fields are
  * omitted in backfill (coarse) mode where eval trajectory data isn't
  * available. classifyBattle degrades gracefully when fields are undefined.
+ *
+ * Note: `playerMistakes` and `openingAssessment` are populated by callers
+ * but not yet read by any rule in classifyBattle. They are reserved for
+ * future rules (e.g. a "weak opening -> Maginot Line" rule) and kept in
+ * the struct so extending the classifier doesn't require plumbing new
+ * fields through every caller.
  */
 export interface BattleShapeFeatures {
   result: "win" | "loss" | "draw";
@@ -99,7 +105,10 @@ export interface BattleShapeFeatures {
   opponentBlunders?: number;
   comebackSwingCp?: number;
   collapseSwingCp?: number;
-  evalAtMove10?: number;
+  evalAtMove10?: number;      // signed centipawn value after both sides'
+                              // 10th move, from player's perspective.
+                              // Negative = player was already losing;
+                              // positive = player was already winning.
 }
 
 /**
