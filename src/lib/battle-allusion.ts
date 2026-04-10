@@ -197,7 +197,6 @@ type EnginePos = {
   moveNumber: number;
   color: "w" | "b";
   scoreCp: number;
-  mate: number | null;
 };
 type EngineDrop = {
   color: "w" | "b";
@@ -207,22 +206,6 @@ type EngineDrop = {
 interface EngineEvalsLike {
   positions: EnginePos[];
   drops: EngineDrop[];
-}
-
-/**
- * Convert a raw engine score (with optional mate) to a signed centipawn
- * value from WHITE's perspective, clamped to ±1000 so mate scores don't
- * distort running min/max calculations.
- */
-function normalizedScoreWhitePov(pos: EnginePos): number {
-  if (pos.mate !== null) {
-    // mate > 0 means the side to move is mating; mate < 0 means being mated.
-    // By convention in this codebase, positive mate on white's move = white
-    // mates. We clamp to ±1000 to avoid distorting swings.
-    const sign = pos.mate > 0 ? 1 : pos.mate < 0 ? -1 : 0;
-    return sign * 1000;
-  }
-  return pos.scoreCp;
 }
 
 /**
@@ -241,21 +224,28 @@ export function buildFeaturesFromEngineEvals(
   const totalMoves = positions.length;
 
   // evalAtMove10: position after both sides' 10th move = index 19.
-  // Normalize to player's perspective.
+  // Normalize to player's perspective. scoreCp is white-POV in this
+  // codebase (see batch-analyze.ts cpLoss formula for the same convention).
   let evalAtMove10: number | undefined;
   if (positions.length > 19) {
-    const raw = normalizedScoreWhitePov(positions[19]);
+    const raw = positions[19].scoreCp;
     evalAtMove10 = playerColor === "w" ? raw : -raw;
   }
 
   // Walk positions tracking running min/max from the player's perspective.
   // comebackSwingCp: deepest deficit that was later recovered to >= 0.
   // collapseSwingCp: peak advantage that was later lost to <= 0.
+  //
+  // Note: mate scores are intentionally ignored here — the raw `mate`
+  // field follows the UCI side-to-move convention while `scoreCp` is
+  // white-POV, and mixing them risks sign errors. Real comebacks and
+  // collapses leave plenty of non-mate eval data in the trajectory for
+  // detection, so ignoring mate positions doesn't hurt accuracy.
   let runningMin = Infinity;
   let runningMax = -Infinity;
   let finalEval = 0;
   for (const p of positions) {
-    const whitePov = normalizedScoreWhitePov(p);
+    const whitePov = p.scoreCp;
     const playerPov = playerColor === "w" ? whitePov : -whitePov;
     if (playerPov < runningMin) runningMin = playerPov;
     if (playerPov > runningMax) runningMax = playerPov;

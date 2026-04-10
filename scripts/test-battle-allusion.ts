@@ -348,16 +348,16 @@ test("counts player and opponent blunders from drops", () => {
   assert.equal(f.opponentBlunders, 1);
 });
 
-test("mate scores are clamped so swings don't exceed 1000cp", () => {
-  // Game with a mate score in the middle. Even though the engine reports
-  // "mate in 2", the clamped normalized value is ±1000, not ±10000. This
-  // prevents a single mate score from saturating the comeback/collapse
-  // detectors at unrealistic magnitudes.
+test("mate positions are ignored by the swing detector", () => {
+  // A mate score in the middle of the game should not distort the running
+  // min/max. The extractor reads only scoreCp (white-POV) and ignores mate
+  // sign semantics entirely. Here: white recovers from -300 to +400 with
+  // a mate-in-2 marker at index 10 (scoreCp=0). The comeback value should
+  // reflect the scoreCp trajectory, unaffected by the mate score.
   const positions: EvalPos[] = [];
   for (let i = 0; i < 20; i++) {
     const color = i % 2 === 0 ? "w" : "b";
     if (i === 10) {
-      // Engine shows mate in 2 for white at this point.
       positions.push(pos(i, color, 0, 2));
     } else if (i < 10) {
       positions.push(pos(i, color, -300));
@@ -372,12 +372,9 @@ test("mate scores are clamped so swings don't exceed 1000cp", () => {
     "good",
     false
   );
-  // White recovered from -300 (not clamped) to a win. comebackSwingCp = 300,
-  // NOT 10000 (which would be the unclamped mate magnitude).
-  assert(
-    f.comebackSwingCp !== undefined && f.comebackSwingCp <= 1000,
-    `expected comebackSwingCp clamped to <= 1000, got ${f.comebackSwingCp}`
-  );
+  // Running min was -300, final eval is 400, so comebackSwingCp = 300.
+  assert.equal(f.comebackSwingCp, 300);
+  assert.equal(f.collapseSwingCp, undefined);
 });
 
 console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILED`}`);
