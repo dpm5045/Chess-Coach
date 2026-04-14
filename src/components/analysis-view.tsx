@@ -125,6 +125,22 @@ export function AnalysisView({
             {analysis.summary.focusArea}
           </p>
         </div>
+        {analysis.summary.battleAllusion && (
+          <div className="mt-3 rounded-lg border-l-2 border-accent-yellow bg-surface-elevated/60 px-3 py-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-accent-yellow">
+              This game was like…
+            </span>
+            <p className="mt-1 text-sm font-semibold text-gray-100">
+              {analysis.summary.battleAllusion.battleName}
+              <span className="ml-2 text-xs font-normal text-gray-400">
+                ({analysis.summary.battleAllusion.subtitle})
+              </span>
+            </p>
+            <p className="mt-1 text-xs italic text-gray-300">
+              {analysis.summary.battleAllusion.flavor}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Opening */}
