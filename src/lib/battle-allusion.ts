@@ -1,6 +1,8 @@
 import { BattleAllusion, AnalysisResult } from "./types";
 import { getAllMoves } from "./chess-utils";
 
+export type { BattleAllusion } from "./types";
+
 /**
  * Catalog of WW2 battles used as game-shape analogies.
  * Each entry is frozen and referenced by rule id in classifyBattle.

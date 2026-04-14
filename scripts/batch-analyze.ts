@@ -13,6 +13,11 @@
 import { Redis } from "@upstash/redis";
 import { createHash } from "crypto";
 import { Chess } from "chess.js";
+import {
+  classifyBattle,
+  buildFeaturesFromEngineEvals,
+  type BattleAllusion,
+} from "../src/lib/battle-allusion";
 
 // Save native fetch before Stockfish can clobber globals
 const nativeFetch = globalThis.fetch;
@@ -45,7 +50,7 @@ interface AnalysisResult {
   criticalMoments: Array<{ moveNumber: number; move: string; type: "blunder" | "mistake" | "excellent" | "missed_tactic"; comment: string; suggestion: string; }>;
   positionalThemes: string;
   endgame: { reached: boolean; comment: string; };
-  summary: { overallAssessment: string; focusArea: string; };
+  summary: { overallAssessment: string; focusArea: string; battleAllusion?: BattleAllusion; };
   missedMatesInOne?: Array<{ moveNumber: number; color: "w" | "b"; playedSan: string; mateSan: string; }>;
 }
 
@@ -478,13 +483,30 @@ function generateAnalysis(
   const playerColorChar = color === "white" ? "w" : "b";
   const playerMissedMates = evals.missedMatesInOne.filter(m => m.color === (playerColorChar as "w" | "b"));
 
+  const gameResult: "win" | "loss" | "draw" =
+    result === "win"
+      ? "win"
+      : ["stalemate", "insufficient", "repetition", "agreed", "50move", "timevsinsufficient"].includes(result)
+      ? "draw"
+      : "loss";
+  const battleAllusion = classifyBattle(
+    buildFeaturesFromEngineEvals(
+      evals,
+      playerColorChar as "w" | "b",
+      gameResult,
+      openingAssessment,
+      endgameReached,
+      { missedMate: playerMissedMates.length > 0 }
+    )
+  );
+
   return {
     analysis: {
       opening: { name: openingName, assessment: openingAssessment, comment: openingComment },
       criticalMoments,
       positionalThemes: themes,
       endgame: { reached: endgameReached, comment: endgameComment },
-      summary: { overallAssessment, focusArea },
+      summary: { overallAssessment, focusArea, battleAllusion },
       missedMatesInOne: playerMissedMates.length > 0 ? playerMissedMates : undefined,
     },
     fixes,
