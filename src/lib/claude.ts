@@ -6,6 +6,10 @@ import {
   getAllMoves,
   getLegalMovesAt,
 } from "./chess-utils";
+import {
+  classifyBattle,
+  buildFeaturesFromEngineEvals,
+} from "./battle-allusion";
 
 const client = new Anthropic();
 
@@ -118,6 +122,20 @@ function extractJson(text: string): string {
   return text.trim();
 }
 
+/** Derive win/loss/draw from the PGN [Result] tag relative to the player's color. */
+function deriveResultFromPgn(
+  pgn: string,
+  playerColor: "w" | "b"
+): "win" | "loss" | "draw" | null {
+  const match = pgn.match(/\[Result\s+"([^"]+)"\]/);
+  if (!match) return null;
+  const tag = match[1];
+  if (tag === "1/2-1/2") return "draw";
+  if (tag === "1-0") return playerColor === "w" ? "win" : "loss";
+  if (tag === "0-1") return playerColor === "b" ? "win" : "loss";
+  return null;
+}
+
 export async function analyzeGame(
   pgn: string,
   username: string,
@@ -181,6 +199,25 @@ export async function analyzeGame(
 
       return { ...cm, suggestion: fallback };
     });
+
+  // Compute battle allusion deterministically (server-side, prompt untouched).
+  if (engineEvals) {
+    const playerColorChar: "w" | "b" = color === "white" ? "w" : "b";
+    const gameResult = deriveResultFromPgn(pgn, playerColorChar);
+    if (gameResult) {
+      const missedMate = (result.missedMatesInOne?.length ?? 0) > 0;
+      result.summary.battleAllusion = classifyBattle(
+        buildFeaturesFromEngineEvals(
+          engineEvals,
+          playerColorChar,
+          gameResult,
+          result.opening.assessment,
+          result.endgame.reached,
+          { missedMate }
+        )
+      );
+    }
+  }
 
   return result;
 }
