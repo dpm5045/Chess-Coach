@@ -9,8 +9,10 @@ import {
   classifyBattle,
   BATTLES,
   buildFeaturesFromEngineEvals,
+  buildFeaturesFromAnalysisResult,
   type BattleShapeFeatures,
 } from "../src/lib/battle-allusion";
+import type { AnalysisResult } from "../src/lib/types";
 
 let failures = 0;
 function test(name: string, fn: () => void) {
@@ -375,6 +377,72 @@ test("mate positions are ignored by the swing detector", () => {
   // Running min was -300, final eval is 400, so comebackSwingCp = 300.
   assert.equal(f.comebackSwingCp, 300);
   assert.equal(f.collapseSwingCp, undefined);
+});
+
+console.log("\n=== buildFeaturesFromAnalysisResult ===");
+
+// Minimal PGN with 40 half-moves, standard headers.
+const SAMPLE_PGN = `[Event "Test"]
+[Site "?"]
+[Date "2026.04.09"]
+[Round "?"]
+[White "Player"]
+[Black "Opponent"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 9. h3 Nb8 10. d4 Nbd7 11. c4 c6 12. cxb5 axb5 13. Nc3 Bb7 14. Bg5 b4 15. Nb1 h6 16. Bh4 c5 17. dxe5 Nxe4 18. Bxe7 Qxe7 19. exd6 Qf6 20. Nbd2 Nxd6 1-0`;
+
+function sampleAnalysis(overrides: Partial<AnalysisResult> = {}): AnalysisResult {
+  return {
+    opening: { name: "Ruy Lopez", assessment: "good", comment: "" },
+    criticalMoments: [],
+    positionalThemes: "",
+    endgame: { reached: true, comment: "" },
+    summary: { overallAssessment: "", focusArea: "" },
+    ...overrides,
+  };
+}
+
+test("extracts totalMoves from PGN", () => {
+  const f = buildFeaturesFromAnalysisResult(sampleAnalysis(), SAMPLE_PGN, "win");
+  assert.equal(f.totalMoves, 40);
+});
+
+test("counts blunders and mistakes from criticalMoments", () => {
+  const analysis = sampleAnalysis({
+    criticalMoments: [
+      { moveNumber: 10, move: "e4", type: "blunder", comment: "", suggestion: "" },
+      { moveNumber: 15, move: "Nf3", type: "blunder", comment: "", suggestion: "" },
+      { moveNumber: 20, move: "d4", type: "mistake", comment: "", suggestion: "" },
+      { moveNumber: 25, move: "f4", type: "excellent", comment: "", suggestion: "" },
+    ],
+  });
+  const f = buildFeaturesFromAnalysisResult(analysis, SAMPLE_PGN, "loss");
+  assert.equal(f.playerBlunders, 2);
+  assert.equal(f.playerMistakes, 1);
+});
+
+test("detects missedMate from analysis.missedMatesInOne", () => {
+  const analysis = sampleAnalysis({
+    missedMatesInOne: [
+      { moveNumber: 18, color: "w", playedSan: "Qf3", mateSan: "Qxf7#" },
+    ],
+  });
+  const f = buildFeaturesFromAnalysisResult(analysis, SAMPLE_PGN, "win");
+  assert.equal(f.missedMate, true);
+});
+
+test("missedMate is false when field absent", () => {
+  const f = buildFeaturesFromAnalysisResult(sampleAnalysis(), SAMPLE_PGN, "win");
+  assert.equal(f.missedMate, false);
+});
+
+test("coarse mode leaves rich fields undefined", () => {
+  const f = buildFeaturesFromAnalysisResult(sampleAnalysis(), SAMPLE_PGN, "win");
+  assert.equal(f.opponentBlunders, undefined);
+  assert.equal(f.comebackSwingCp, undefined);
+  assert.equal(f.collapseSwingCp, undefined);
+  assert.equal(f.evalAtMove10, undefined);
 });
 
 console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILED`}`);

@@ -1,4 +1,5 @@
-import { BattleAllusion } from "./types";
+import { BattleAllusion, AnalysisResult } from "./types";
+import { getAllMoves } from "./chess-utils";
 
 /**
  * Catalog of WW2 battles used as game-shape analogies.
@@ -289,5 +290,42 @@ export function buildFeaturesFromEngineEvals(
     comebackSwingCp,
     collapseSwingCp,
     evalAtMove10,
+  };
+}
+
+// --- Feature extraction (coarse mode, for backfill) ---
+
+/**
+ * Extract BattleShapeFeatures from an existing cached AnalysisResult + the
+ * original PGN. Used by the backfill script — the rich eval trajectory is
+ * not available at backfill time, so comebackSwingCp/collapseSwingCp/
+ * evalAtMove10/opponentBlunders are intentionally left undefined and the
+ * classifier skips rules that require them.
+ */
+export function buildFeaturesFromAnalysisResult(
+  analysis: AnalysisResult,
+  pgn: string,
+  result: "win" | "loss" | "draw"
+): BattleShapeFeatures {
+  const moves = getAllMoves(pgn);
+  const totalMoves = moves.length;
+
+  let playerBlunders = 0;
+  let playerMistakes = 0;
+  for (const cm of analysis.criticalMoments) {
+    if (cm.type === "blunder") playerBlunders++;
+    else if (cm.type === "mistake") playerMistakes++;
+  }
+
+  const missedMate = (analysis.missedMatesInOne?.length ?? 0) > 0;
+
+  return {
+    result,
+    totalMoves,
+    playerBlunders,
+    playerMistakes,
+    openingAssessment: analysis.opening.assessment,
+    missedMate,
+    endgameReached: analysis.endgame.reached,
   };
 }
