@@ -7,7 +7,13 @@ import { getPlayerColor, getPlayerOutcome } from "../src/lib/chess-com";
 
 const USERS = ["castledoon", "exstrax"];
 const MAX_GAMES = 50;
+const MONTHS_TO_FETCH = 3;
 const FORCE = process.argv.includes("--force");
+const CHESS_COM_API = "https://api.chess.com/pub";
+const HEADERS = {
+  "User-Agent": "ChessCoach/1.0 (github.com/chess-coach)",
+  Accept: "application/json",
+};
 
 interface PlayerResult {
   username: string;
@@ -136,6 +142,12 @@ function extractJson(text: string): string {
   return text.trim();
 }
 
+async function fetchJson<T>(url: string): Promise<T> {
+  const res = await fetch(url, { headers: HEADERS });
+  if (!res.ok) throw new Error(`Chess.com API error: ${res.status} for ${url}`);
+  return res.json() as Promise<T>;
+}
+
 async function main() {
   const redis = getRedis();
   const client = new Anthropic();
@@ -144,20 +156,26 @@ async function main() {
   for (const username of USERS) {
     console.log(`\n=== Processing ${username} ===`);
 
-    // Load games from local data file
-    const gamesPath = path.join(dataDir, `${username}-games.json`);
-    if (!fs.existsSync(gamesPath)) {
-      console.log(`No games file at ${gamesPath} — skipping`);
-      continue;
+    // Fetch recent games directly from Chess.com
+    const { archives } = await fetchJson<{ archives: string[] }>(
+      `${CHESS_COM_API}/player/${username}/games/archives`
+    );
+    const recentArchives = archives.slice(-MONTHS_TO_FETCH);
+    const allGames: ChessComGame[] = [];
+    for (const archiveUrl of recentArchives) {
+      const { games } = await fetchJson<{ games: ChessComGame[] }>(archiveUrl);
+      allGames.push(...games.filter((g) => g.pgn));
     }
 
-    const allGames: ChessComGame[] = JSON.parse(fs.readFileSync(gamesPath, "utf-8"));
+    // Save locally for reference
+    const gamesPath = path.join(dataDir, `${username}-games.json`);
+    fs.writeFileSync(gamesPath, JSON.stringify(allGames, null, 2));
+
     const games = allGames
-      .filter((g) => g.pgn)
       .sort((a, b) => b.end_time - a.end_time)
       .slice(0, MAX_GAMES);
 
-    console.log(`  ${games.length} games (of ${allGames.length} total)`);
+    console.log(`  Using ${games.length} most recent games (of ${allGames.length} fetched from last ${MONTHS_TO_FETCH} months)`);
 
     const uuids = games.map((g) => g.uuid);
     const key = metaCacheKey(username, uuids);
