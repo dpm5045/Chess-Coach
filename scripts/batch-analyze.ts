@@ -13,6 +13,9 @@
 import { Redis } from "@upstash/redis";
 import { createHash } from "crypto";
 import { Chess } from "chess.js";
+import * as fs from "fs";
+import * as path from "path";
+import { spawnSync } from "child_process";
 import {
   classifyBattle,
   buildFeaturesFromEngineEvals,
@@ -552,6 +555,11 @@ async function main() {
 
     allGames.sort((a, b) => b.end_time - a.end_time);
 
+    // Save fetched games locally so backfill-meta.ts has fresh data
+    const dataDir = path.join(process.cwd(), "scripts", "data");
+    const gamesPath = path.join(dataDir, `${username}-games.json`);
+    fs.writeFileSync(gamesPath, JSON.stringify(allGames, null, 2));
+
     // Determine which games to analyze
     const toAnalyze: Game[] = [];
     let skipped = 0;
@@ -612,6 +620,17 @@ async function main() {
   }
 
   log(`\nDone! Analyzed ${totalAnalyzed} games, fixed ${totalFixes} illegal suggestions. $0 API cost.`);
+
+  log("\n=== Running meta analysis ===");
+  const metaResult = spawnSync(
+    "npx",
+    ["tsx", "scripts/backfill-meta.ts", "--force"],
+    { stdio: "inherit", env: process.env, shell: true }
+  );
+  if (metaResult.status !== 0) {
+    log("Meta analysis failed (non-zero exit). Check output above.");
+  }
+
   process.exit(0);
 }
 

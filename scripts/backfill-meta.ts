@@ -7,6 +7,7 @@ import { getPlayerColor, getPlayerOutcome } from "../src/lib/chess-com";
 
 const USERS = ["castledoon", "exstrax"];
 const MAX_GAMES = 50;
+const FORCE = process.argv.includes("--force");
 
 interface PlayerResult {
   username: string;
@@ -163,7 +164,7 @@ async function main() {
 
     // Check if already cached
     const existing = await redis.get(key);
-    if (existing) {
+    if (existing && !FORCE) {
       console.log(`  Already cached at ${key} — skipping`);
       continue;
     }
