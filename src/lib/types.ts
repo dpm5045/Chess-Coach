@@ -168,6 +168,34 @@ export interface MetaTheme {
   actionItem: string;
 }
 
+export interface CastlingStats {
+  total: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  winRate: number;
+}
+
+export interface CastlingColorBreakdown {
+  castled: CastlingStats;
+  didNotCastle: CastlingStats;
+}
+
+export interface CastlingAnalysisResult {
+  username: string;
+  gamesAnalyzed: number;
+  overall: CastlingColorBreakdown;
+  byColor: {
+    asWhite: CastlingColorBreakdown;
+    asBlack: CastlingColorBreakdown;
+  };
+  bySide: {
+    kingside: CastlingStats;
+    queenside: CastlingStats;
+  };
+  averageCastlingMove: number | null;
+}
+
 export interface MetaAnalysisResult {
   playerUsername: string;
   gamesAnalyzed: number;

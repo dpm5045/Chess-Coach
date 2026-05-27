@@ -91,6 +91,14 @@ export default function Home() {
                   >
                     Meta Analysis
                   </button>
+                  <button
+                    onClick={() =>
+                      router.push(`/castling/${encodeURIComponent(data.profile.username)}`)
+                    }
+                    className="w-full rounded-lg bg-accent-orange py-3 text-lg font-semibold text-white"
+                  >
+                    Castling Analysis
+                  </button>
                 </div>
               )}
             </div>

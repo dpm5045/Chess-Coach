@@ -38,6 +38,18 @@ export function AnalysisSkeleton() {
   );
 }
 
+export function CastlingAnalysisSkeleton() {
+  return (
+    <div className="animate-pulse space-y-4">
+      <div className="h-20 rounded-xl bg-surface-card" />
+      <div className="h-36 rounded-xl bg-surface-card" />
+      <div className="h-36 rounded-xl bg-surface-card" />
+      <div className="h-36 rounded-xl bg-surface-card" />
+      <div className="h-28 rounded-xl bg-surface-card" />
+    </div>
+  );
+}
+
 export function MetaAnalysisSkeleton() {
   return (
     <div className="animate-pulse space-y-4">
