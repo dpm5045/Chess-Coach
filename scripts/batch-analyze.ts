@@ -11,16 +11,33 @@
  */
 
 import { Redis } from "@upstash/redis";
-import { createHash } from "crypto";
-import { Chess } from "chess.js";
 import * as fs from "fs";
 import * as path from "path";
 import { spawnSync } from "child_process";
 import {
   classifyBattle,
   buildFeaturesFromEngineEvals,
-  type BattleAllusion,
 } from "../src/lib/battle-allusion";
+import {
+  parseUciInfoLines,
+  toWhitePov,
+  getTerminalEval,
+  findEvalDrops,
+  detectMissedMatesInOne,
+} from "../src/lib/engine-core";
+import {
+  getAllMoves,
+  isLegalMoveInFen,
+  getLegalMovesInFen,
+  type MoveDetail,
+} from "../src/lib/chess-utils";
+import { analysisCacheKey } from "../src/lib/analysis-cache";
+import {
+  ANALYSIS_VERSION,
+  type AnalysisResult,
+  type PositionEval,
+  type EvalDrop,
+} from "../src/lib/types";
 
 // Save native fetch before Stockfish can clobber globals
 const nativeFetch = globalThis.fetch;
@@ -45,17 +62,6 @@ const FORCE_CUTOFF = FORCE_DAYS > 0 ? Date.now() / 1000 - FORCE_DAYS * 86400 : 0
 
 interface PlayerResult { username: string; rating: number; result: string; }
 interface Game { url: string; pgn: string; uuid: string; time_class: string; white: PlayerResult; black: PlayerResult; end_time: number; }
-interface MoveDetail { moveNumber: number; color: "w" | "b"; san: string; from: string; to: string; fen: string; }
-interface PositionEval { moveNumber: number; color: "w" | "b"; san: string; scoreCp: number; mate: number | null; bestLine: string[]; depth: number; }
-interface EvalDrop { moveNumber: number; color: "w" | "b"; san: string; evalBefore: number; evalAfter: number; cpLoss: number; engineBest: string; engineLine: string[]; }
-interface AnalysisResult {
-  opening: { name: string; assessment: "good" | "inaccurate" | "dubious"; comment: string; };
-  criticalMoments: Array<{ moveNumber: number; move: string; type: "blunder" | "mistake" | "excellent" | "missed_tactic"; comment: string; suggestion: string; }>;
-  positionalThemes: string;
-  endgame: { reached: boolean; comment: string; };
-  summary: { overallAssessment: string; focusArea: string; battleAllusion?: BattleAllusion; };
-  missedMatesInOne?: Array<{ moveNumber: number; color: "w" | "b"; playedSan: string; mateSan: string; }>;
-}
 
 // --- Stockfish Engine ---
 
@@ -90,37 +96,11 @@ async function initStockfish() {
   } as typeof process.stdout.write;
 }
 
-function parseResult(lines: string[]): { scoreCp: number; mate: number | null; bestLine: string[]; depth: number } {
-  const infoLines = lines.filter(l => l.startsWith("info depth"));
-  if (infoLines.length === 0) return { scoreCp: 0, mate: null, bestLine: [], depth: 0 };
-  const lastInfo = infoLines[infoLines.length - 1];
-  const cp = lastInfo.match(/score cp (-?\d+)/);
-  const mate = lastInfo.match(/score mate (-?\d+)/);
-  const pv = lastInfo.match(/ pv (.+)/);
-  const d = lastInfo.match(/depth (\d+)/);
-  return {
-    scoreCp: cp ? parseInt(cp[1], 10) : 0,
-    mate: mate ? parseInt(mate[1], 10) : null,
-    bestLine: pv ? pv[1].split(" ") : [],
-    depth: d ? parseInt(d[1], 10) : 0,
-  };
-}
-
-async function evalPosition(fen: string): Promise<{ scoreCp: number; mate: number | null; bestLine: string[]; depth: number }> {
+async function evalPosition(fen: string): Promise<ReturnType<typeof parseUciInfoLines>> {
   collectedLines = [];
   engine.ccall("command", null, ["string"], [`position fen ${fen}`]);
   await engine.ccall("command", null, ["string"], [`go depth ${TARGET_DEPTH}`], { async: true });
-  return parseResult(collectedLines);
-}
-
-/** Return a synthetic eval for checkmate/stalemate/draw positions */
-function getTerminalEval(fen: string): { scoreCp: number; mate: number | null; bestLine: string[]; depth: number } | null {
-  try {
-    const chess = new Chess(fen);
-    if (chess.isCheckmate()) return { scoreCp: 0, mate: 0, bestLine: [], depth: TARGET_DEPTH };
-    if (chess.isStalemate() || chess.isDraw()) return { scoreCp: 0, mate: null, bestLine: [], depth: TARGET_DEPTH };
-  } catch { /* invalid FEN — let engine handle */ }
-  return null;
+  return parseUciInfoLines(collectedLines);
 }
 
 // --- Helpers ---
@@ -130,12 +110,6 @@ function getRedis(): Redis {
   const token = process.env.KV_REST_API_TOKEN;
   if (!url || !token) throw new Error("Missing KV_REST_API_URL or KV_REST_API_TOKEN");
   return new Redis({ url, token });
-}
-
-function analysisCacheKey(pgn: string): string {
-  const moves = pgn.replace(/\[.*?\]\s*/g, "").replace(/\s+/g, " ").trim();
-  const hash = createHash("sha256").update(moves).digest("hex").slice(0, 16);
-  return `analysis:${hash}`;
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -149,97 +123,19 @@ function isCurrentMonth(year: string, month: string): boolean {
   return parseInt(year, 10) === now.getFullYear() && parseInt(month, 10) === now.getMonth() + 1;
 }
 
-function getAllMoves(pgn: string): MoveDetail[] {
-  try {
-    const chess = new Chess();
-    chess.loadPgn(pgn);
-    const history = chess.history({ verbose: true });
-    const replay = new Chess();
-    const moves: MoveDetail[] = [];
-    for (const move of history) {
-      replay.move(move.san);
-      moves.push({
-        moveNumber: Math.floor(moves.length / 2) + 1,
-        color: move.color,
-        san: move.san,
-        from: move.from,
-        to: move.to,
-        fen: replay.fen(),
-      });
-    }
-    return moves;
-  } catch { return []; }
-}
-
-// --- UCI to SAN conversion ---
-
-/**
- * Convert a UCI move (e.g. "e2e4") to SAN (e.g. "e4") given a FEN position.
- * Returns null if the move is illegal in that position.
- */
-function uciToSan(fen: string, uciMove: string): string | null {
-  try {
-    const chess = new Chess(fen);
-    const from = uciMove.slice(0, 2);
-    const to = uciMove.slice(2, 4);
-    const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
-    const result = chess.move({ from, to, promotion });
-    return result ? result.san : null;
-  } catch { return null; }
-}
-
-/**
- * Convert a UCI line (array of UCI moves) to SAN, starting from a FEN position.
- * Stops at the first illegal move.
- */
-function uciLineToSan(fen: string, uciMoves: string[]): string[] {
-  const sanMoves: string[] = [];
-  const chess = new Chess(fen);
-  for (const uci of uciMoves) {
-    const from = uci.slice(0, 2);
-    const to = uci.slice(2, 4);
-    const promotion = uci.length > 4 ? uci[4] : undefined;
-    try {
-      const result = chess.move({ from, to, promotion });
-      if (!result) break;
-      sanMoves.push(result.san);
-    } catch { break; }
-  }
-  return sanMoves;
-}
-
-/**
- * Get the FEN position BEFORE a move was played (the decision point).
- */
-// --- Move Validation ---
-
-function isLegalMoveAt(fen: string, san: string): boolean {
-  try {
-    const chess = new Chess(fen);
-    return chess.move(san) !== null;
-  } catch { return false; }
-}
-
-function getLegalMovesAt(fen: string, exclude?: string): string[] {
-  try {
-    const chess = new Chess(fen);
-    return chess.moves().filter((m) => m !== exclude);
-  } catch { return []; }
-}
-
 // --- Engine Evaluation ---
 
-async function evaluateGame(moves: MoveDetail[]): Promise<{ positions: PositionEval[]; drops: EvalDrop[]; missedMatesInOne: Array<{ moveNumber: number; color: "w" | "b"; playedSan: string; mateSan: string }> }> {
+async function evaluateGame(moves: MoveDetail[]): Promise<{
+  positions: PositionEval[];
+  drops: EvalDrop[];
+  missedMatesInOne: Array<{ moveNumber: number; color: "w" | "b"; playedSan: string; mateSan: string }>;
+}> {
   const positions: PositionEval[] = [];
 
   for (const move of moves) {
-    const terminal = getTerminalEval(move.fen);
-    if (terminal) {
-      positions.push({ moveNumber: move.moveNumber, color: move.color, san: move.san, ...terminal });
-      continue;
-    }
-
-    const result = await evalPosition(move.fen);
+    const result =
+      getTerminalEval(move.fen, TARGET_DEPTH) ??
+      toWhitePov(await evalPosition(move.fen), move.fen);
     positions.push({
       moveNumber: move.moveNumber,
       color: move.color,
@@ -251,59 +147,8 @@ async function evaluateGame(moves: MoveDetail[]): Promise<{ positions: PositionE
     });
   }
 
-  // Detect missed mate-in-1 opportunities
-  const missedMatesInOne: Array<{ moveNumber: number; color: "w" | "b"; playedSan: string; mateSan: string }> = [];
-  for (let i = 1; i < positions.length; i++) {
-    const prev = positions[i - 1];
-    const curr = positions[i];
-    // prev is eval AFTER the opponent's move = side-to-move is curr's color
-    // prev.mate === 1 means the side about to play has forced mate in 1
-    if (prev.mate === 1) {
-      // Check if the move actually played delivered checkmate
-      const resultingFen = moves[i].fen;
-      try {
-        const chess = new Chess(resultingFen);
-        if (!chess.isCheckmate()) {
-          // Player had mate in 1 but didn't play it
-          const decisionFen = moves[i - 1].fen;
-          const mateSan = prev.bestLine.length > 0 ? uciToSan(decisionFen, prev.bestLine[0]) : null;
-          if (mateSan) {
-            missedMatesInOne.push({
-              moveNumber: curr.moveNumber,
-              color: curr.color,
-              playedSan: curr.san,
-              mateSan,
-            });
-          }
-        }
-      } catch { /* invalid FEN — skip */ }
-    }
-  }
-
-  const drops: EvalDrop[] = [];
-  for (let i = 1; i < positions.length; i++) {
-    const prev = positions[i - 1];
-    const curr = positions[i];
-    const playerMultiplier = curr.color === "w" ? 1 : -1;
-    const prevScore = prev.mate !== null ? (prev.mate > 0 ? 10000 : -10000) * playerMultiplier : prev.scoreCp * playerMultiplier;
-    const currScore = curr.mate !== null ? (curr.mate > 0 ? 10000 : -10000) * playerMultiplier : curr.scoreCp * playerMultiplier;
-    const cpLoss = prevScore - currScore;
-
-    if (cpLoss >= CP_DROP_THRESHOLD) {
-      // FEN before the current move — the position where the player was deciding
-      const decisionFen = i > 0 ? moves[i - 1].fen : "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-
-      const bestSan = prev.bestLine.length > 0 ? uciToSan(decisionFen, prev.bestLine[0]) : null;
-      const lineSan = prev.bestLine.length > 0 ? uciLineToSan(decisionFen, prev.bestLine) : [];
-
-      drops.push({
-        moveNumber: curr.moveNumber, color: curr.color, san: curr.san,
-        evalBefore: prevScore, evalAfter: currScore, cpLoss,
-        engineBest: bestSan || "", engineLine: lineSan,
-      });
-    }
-  }
-
+  const drops = findEvalDrops(positions, moves, CP_DROP_THRESHOLD);
+  const missedMatesInOne = detectMissedMatesInOne(moves, positions);
   return { positions, drops, missedMatesInOne };
 }
 
@@ -382,9 +227,16 @@ function generateAnalysis(
     const moveIdx = moves.findIndex(m => m.moveNumber === drop.moveNumber && m.color === drop.color);
     const prevEval = moveIdx > 0 ? evals.positions[moveIdx - 1] : null;
 
-    if (prevEval != null && prevEval.mate !== null && Math.abs(prevEval.mate) <= 10) {
+    const moverMate =
+      prevEval != null &&
+      prevEval.mate !== null &&
+      Math.abs(prevEval.mate) <= 10 &&
+      (drop.color === "w" ? prevEval.mate > 0 : prevEval.mate < 0)
+        ? prevEval.mate
+        : null;
+    if (moverMate !== null) {
       // There was a forced mate available
-      const mateIn = Math.abs(prevEval.mate);
+      const mateIn = Math.abs(moverMate);
       const lineStr = drop.engineLine.length > 0 ? ` The winning sequence was: ${drop.engineLine.join(", ")}.` : "";
       comment = `You had a forced mate in ${mateIn} here but played ${drop.san} instead, which lost ${drop.cpLoss}cp.${lineStr}${drop.engineBest ? ` The engine's first move was ${drop.engineBest}.` : ""}`;
     } else if (type === "blunder") {
@@ -418,10 +270,10 @@ function generateAnalysis(
     if (moveIdx === -1) continue;
     const decisionFen = moveIdx > 0 ? moves[moveIdx - 1].fen : "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-    if (!isLegalMoveAt(decisionFen, cm.suggestion)) {
+    if (!isLegalMoveInFen(decisionFen, cm.suggestion)) {
       fixes++;
       // Pick a legal fallback
-      const legalMoves = getLegalMovesAt(decisionFen, cm.move);
+      const legalMoves = getLegalMovesInFen(decisionFen, cm.move);
       const captures = legalMoves.filter(m => m.includes("x"));
       const checks = legalMoves.filter(m => m.includes("+"));
       const fallback = captures[0] || checks[0] || legalMoves[0] || "";
@@ -511,6 +363,8 @@ function generateAnalysis(
       endgame: { reached: endgameReached, comment: endgameComment },
       summary: { overallAssessment, focusArea, battleAllusion },
       missedMatesInOne: playerMissedMates.length > 0 ? playerMissedMates : undefined,
+      source: "batch",
+      analysisVersion: ANALYSIS_VERSION,
     },
     fixes,
   };

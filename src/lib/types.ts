@@ -102,6 +102,10 @@ export interface AnalysisResult {
     battleAllusion?: BattleAllusion;
   };
   missedMatesInOne?: MissedMateInOne[];
+  /** Who generated this analysis: Claude coaching or the template-based batch script. */
+  source?: "claude" | "batch";
+  /** Schema/pipeline version. v2 = white-POV normalized evals. */
+  analysisVersion?: number;
 }
 
 export interface CriticalMoment {
@@ -190,3 +194,6 @@ export interface MetaAnalysisResult {
   coachingPlan: string[];
   missedMatesInOne?: MissedMateInOneEntry[];
 }
+
+/** Current analysis pipeline version. v2 = white-POV normalized evals. */
+export const ANALYSIS_VERSION = 2;
