@@ -1,11 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { AnalysisResult, CriticalMoment, MetaAnalysisResult } from "./types";
+import { AnalysisResult, CriticalMoment, MetaAnalysisResult, EngineAnalysis } from "./types";
 import {
   isLegalMoveAt,
   moveExistsInGame,
   getAllMoves,
   getLegalMovesAt,
 } from "./chess-utils";
+import { detectMissedMatesInOne } from "./engine-core";
+import { AnalysisResultSchema, MetaAnalysisResultSchema } from "./schemas";
 import {
   classifyBattle,
   buildFeaturesFromEngineEvals,
@@ -70,7 +72,7 @@ function buildUserPrompt(
   username: string,
   color: "white" | "black",
   rating: number,
-  engineEvals?: { positions: Array<{ moveNumber: number; color: "w" | "b"; san: string; scoreCp: number; mate: number | null; bestLine: string[]; depth: number }>; drops: Array<{ moveNumber: number; color: "w" | "b"; san: string; evalBefore: number; evalAfter: number; cpLoss: number; engineBest: string; engineLine: string[] }> }
+  engineEvals?: EngineAnalysis
 ): string {
   const moves = getAllMoves(pgn);
   const fenList = moves
@@ -91,7 +93,14 @@ ${fenList}`;
   if (engineEvals && engineEvals.positions.length > 0) {
     const evalList = engineEvals.positions
       .map((p) => {
-        const score = p.mate !== null ? `mate in ${p.mate}` : `${p.scoreCp}cp`;
+        const score =
+          p.mate !== null
+            ? `mate in ${Math.abs(p.mate)} for ${p.mate > 0 ? "White" : "Black"}`
+            : Math.abs(p.scoreCp) >= 9999
+            ? p.scoreCp > 0
+              ? "White wins by checkmate"
+              : "Black wins by checkmate"
+            : `${p.scoreCp}cp`;
         const moveLabel = `${p.moveNumber}${p.color === "w" ? "." : "..."} ${p.san}`;
         const line = p.bestLine.length > 0 ? ` [engine line: ${p.bestLine.join(" ")}]` : "";
         return `${moveLabel} → eval: ${score} (depth ${p.depth})${line}`;
@@ -141,7 +150,7 @@ export async function analyzeGame(
   username: string,
   color: "white" | "black",
   rating: number,
-  engineEvals?: { positions: Array<{ moveNumber: number; color: "w" | "b"; san: string; scoreCp: number; mate: number | null; bestLine: string[]; depth: number }>; drops: Array<{ moveNumber: number; color: "w" | "b"; san: string; evalBefore: number; evalAfter: number; cpLoss: number; engineBest: string; engineLine: string[] }> }
+  engineEvals?: EngineAnalysis
 ): Promise<AnalysisResult> {
   const message = await client.messages.create({
     model: "claude-sonnet-4-6",
@@ -159,12 +168,22 @@ export async function analyzeGame(
     message.content[0].type === "text" ? message.content[0].text : "";
   const jsonStr = extractJson(responseText);
 
-  let result: AnalysisResult;
+  let parsedJson: unknown;
   try {
-    result = JSON.parse(jsonStr) as AnalysisResult;
+    parsedJson = JSON.parse(jsonStr);
   } catch {
     throw new Error("Failed to parse analysis response from Claude");
   }
+
+  const validated = AnalysisResultSchema.safeParse(parsedJson);
+  if (!validated.success) {
+    const issues = validated.error.issues
+      .slice(0, 3)
+      .map((i) => `${i.path.join(".")}: ${i.message}`)
+      .join("; ");
+    throw new Error(`Claude response failed schema validation: ${issues}`);
+  }
+  const result: AnalysisResult = validated.data;
 
   // Post-process: validate that moves and suggestions are legal.
   // This catches hallucinated moves that don't exist on the board.
@@ -200,12 +219,22 @@ export async function analyzeGame(
       return { ...cm, suggestion: fallback };
     });
 
-  // Compute battle allusion deterministically (server-side, prompt untouched).
+  // Deterministic post-processing from engine data (server-side, prompt untouched).
   if (engineEvals) {
     const playerColorChar: "w" | "b" = color === "white" ? "w" : "b";
+
+    // Missed mates-in-one were previously only computed by the batch script;
+    // now the live path produces them too.
+    const moves = getAllMoves(pgn);
+    const playerMissedMates = detectMissedMatesInOne(moves, engineEvals.positions).filter(
+      (m) => m.color === playerColorChar
+    );
+    if (playerMissedMates.length > 0) {
+      result.missedMatesInOne = playerMissedMates;
+    }
+
     const gameResult = deriveResultFromPgn(pgn, playerColorChar);
     if (gameResult) {
-      const missedMate = (result.missedMatesInOne?.length ?? 0) > 0;
       result.summary.battleAllusion = classifyBattle(
         buildFeaturesFromEngineEvals(
           engineEvals,
@@ -213,7 +242,7 @@ export async function analyzeGame(
           gameResult,
           result.opening.assessment,
           result.endgame.reached,
-          { missedMate }
+          { missedMate: playerMissedMates.length > 0 }
         )
       );
     }
@@ -296,9 +325,20 @@ export async function analyzePlayerMeta(
     message.content[0].type === "text" ? message.content[0].text : "";
   const jsonStr = extractJson(responseText);
 
+  let parsedJson: unknown;
   try {
-    return JSON.parse(jsonStr) as MetaAnalysisResult;
+    parsedJson = JSON.parse(jsonStr);
   } catch {
     throw new Error("Failed to parse meta analysis response from Claude");
   }
+
+  const validated = MetaAnalysisResultSchema.safeParse(parsedJson);
+  if (!validated.success) {
+    const issues = validated.error.issues
+      .slice(0, 3)
+      .map((i) => `${i.path.join(".")}: ${i.message}`)
+      .join("; ");
+    throw new Error(`Meta analysis response failed schema validation: ${issues}`);
+  }
+  return validated.data as MetaAnalysisResult;
 }
