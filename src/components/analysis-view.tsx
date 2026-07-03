@@ -44,6 +44,10 @@ function EvalBar({ scoreCp, mate }: { scoreCp: number; mate: number | null }) {
   if (mate !== null) {
     whitePercent = mate > 0 ? 95 : 5;
     label = `M${Math.abs(mate)}`;
+  } else if (Math.abs(scoreCp) >= 9999) {
+    // Terminal checkmate position (see MATE_SCORE_CP in engine-core)
+    whitePercent = scoreCp > 0 ? 100 : 0;
+    label = "#";
   } else {
     const clamped = Math.max(-1000, Math.min(1000, scoreCp));
     whitePercent = 50 + (clamped / 1000) * 45;

@@ -1,6 +1,7 @@
 import { EngineAnalysis } from "./types";
 
-const CACHE_PREFIX = "engine-eval:";
+// v2: evals are now normalized to white-POV; never reuse v1 entries.
+const CACHE_PREFIX = "engine-eval-v2:";
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 interface CacheEntry {

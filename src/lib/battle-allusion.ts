@@ -227,8 +227,8 @@ export function buildFeaturesFromEngineEvals(
   const totalMoves = positions.length;
 
   // evalAtMove10: position after both sides' 10th move = index 19.
-  // Normalize to player's perspective. scoreCp is white-POV in this
-  // codebase (see batch-analyze.ts cpLoss formula for the same convention).
+  // Normalize to player's perspective. scoreCp is white-POV
+  // (normalized at parse time in engine-core).
   let evalAtMove10: number | undefined;
   if (positions.length > 19) {
     const raw = positions[19].scoreCp;
@@ -239,11 +239,9 @@ export function buildFeaturesFromEngineEvals(
   // comebackSwingCp: deepest deficit that was later recovered to >= 0.
   // collapseSwingCp: peak advantage that was later lost to <= 0.
   //
-  // Note: mate scores are intentionally ignored here — the raw `mate`
-  // field follows the UCI side-to-move convention while `scoreCp` is
-  // white-POV, and mixing them risks sign errors. Real comebacks and
-  // collapses leave plenty of non-mate eval data in the trajectory for
-  // detection, so ignoring mate positions doesn't hurt accuracy.
+  // Note: mate scores are intentionally ignored here — positions with a
+  // mate score carry scoreCp 0, and real comebacks/collapses leave plenty
+  // of non-mate eval data in the trajectory for detection.
   let runningMin = Infinity;
   let runningMax = -Infinity;
   let finalEval = 0;
