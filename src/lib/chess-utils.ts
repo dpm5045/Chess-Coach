@@ -242,6 +242,65 @@ export function getFenBeforeMove(
 }
 
 /**
+ * Convert a UCI move (e.g. "e2e4") to SAN (e.g. "e4") given a FEN position.
+ * Returns null if the move is illegal in that position.
+ */
+export function uciToSan(fen: string, uciMove: string): string | null {
+  try {
+    const chess = new Chess(fen);
+    const from = uciMove.slice(0, 2);
+    const to = uciMove.slice(2, 4);
+    const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
+    const result = chess.move({ from, to, promotion });
+    return result ? result.san : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Convert a UCI line (array of UCI moves) to SAN, starting from a FEN position.
+ * Stops at the first illegal move.
+ */
+export function uciLineToSan(fen: string, uciMoves: string[]): string[] {
+  const sanMoves: string[] = [];
+  const chess = new Chess(fen);
+  for (const uci of uciMoves) {
+    const from = uci.slice(0, 2);
+    const to = uci.slice(2, 4);
+    const promotion = uci.length > 4 ? uci[4] : undefined;
+    try {
+      const result = chess.move({ from, to, promotion });
+      if (!result) break;
+      sanMoves.push(result.san);
+    } catch {
+      break;
+    }
+  }
+  return sanMoves;
+}
+
+/** Check whether a SAN move is legal in the given FEN position. */
+export function isLegalMoveInFen(fen: string, san: string): boolean {
+  try {
+    const chess = new Chess(fen);
+    return chess.move(san) !== null;
+  } catch {
+    return false;
+  }
+}
+
+/** All legal SAN moves in a FEN position, optionally excluding one move. */
+export function getLegalMovesInFen(fen: string, exclude?: string): string[] {
+  try {
+    const chess = new Chess(fen);
+    return chess.moves().filter((m) => m !== exclude);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Parse a FEN string into an 8x8 board array.
  * Returns array of 64 entries, row by row from rank 8 to rank 1.
  * Each entry is a piece character or null for empty squares.
