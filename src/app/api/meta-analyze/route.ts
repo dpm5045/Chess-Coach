@@ -1,11 +1,12 @@
 import { isAllowedUser, getPlayerColor, getPlayerOutcome } from "@/lib/chess-com";
 import { getRedis, analysisCacheKey } from "@/lib/analysis-cache";
 import { getAllGames } from "@/lib/game-cache";
-import { MetaAnalysisResult, MissedMateInOneEntry, AnalysisResult, TimeClass } from "@/lib/types";
+import { MetaAnalysisResult, MissedMateInOneEntry, AnalysisResult, TimeClass, MetaFilter, META_FILTERS } from "@/lib/types";
 
 async function composeMissedMates(
   redis: NonNullable<ReturnType<typeof getRedis>>,
-  username: string
+  username: string,
+  filter: MetaFilter
 ): Promise<MissedMateInOneEntry[]> {
   // Use the shared self-healing game cache. It checks Redis first and
   // refetches from Chess.com on miss, so we don't silently break when the
@@ -19,8 +20,9 @@ async function composeMissedMates(
 
   if (allGames.length === 0) return [];
 
-  // Filter to losses and draws
+  // Filter to losses and draws in the requested time class
   const lostOrDrawn = allGames.filter((game) => {
+    if (filter !== "all" && game.time_class !== filter) return false;
     const outcome = getPlayerOutcome(game, username);
     return outcome === "loss" || outcome === "draw";
   });
@@ -86,6 +88,15 @@ export async function GET(request: Request) {
     return Response.json({ error: "Player not available" }, { status: 403 });
   }
 
+  const filterParam = searchParams.get("filter") ?? "all";
+  if (!META_FILTERS.includes(filterParam as MetaFilter)) {
+    return Response.json(
+      { error: `Invalid filter "${filterParam}" — use one of: ${META_FILTERS.join(", ")}` },
+      { status: 400 }
+    );
+  }
+  const filter = filterParam as MetaFilter;
+
   try {
     const redis = getRedis();
     if (!redis) {
@@ -95,19 +106,25 @@ export async function GET(request: Request) {
       );
     }
 
-    // Load base meta analysis (LLM-generated)
-    const key = `meta:${username.toLowerCase()}:latest`;
-    const result = await redis.get<MetaAnalysisResult>(key);
+    // Load base meta analysis (LLM-generated) for the requested filter
+    const key = `meta:${username.toLowerCase()}:${filter}:latest`;
+    let result = await redis.get<MetaAnalysisResult>(key);
+
+    // Legacy fallback: pre-filter deployments only wrote meta:{user}:latest
+    if (!result && filter === "all") {
+      result = await redis.get<MetaAnalysisResult>(`meta:${username.toLowerCase()}:latest`);
+    }
 
     if (!result) {
+      const scope = filter === "all" ? "" : `${filter} `;
       return Response.json(
-        { error: "No coaching report available yet. Run the backfill script to generate one." },
+        { error: `No ${scope}coaching report available yet. Run the backfill script (or the player has fewer than 10 ${scope}games).` },
         { status: 404 }
       );
     }
 
     // Compose missed-mate-in-1 entries from per-game analyses
-    const missedMatesInOne = await composeMissedMates(redis, username);
+    const missedMatesInOne = await composeMissedMates(redis, username, filter);
 
     return Response.json({
       ...result,
