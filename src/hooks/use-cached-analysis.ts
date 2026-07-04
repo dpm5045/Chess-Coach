@@ -4,7 +4,8 @@ import { getAllMoves } from "@/lib/chess-utils";
 import { evaluateGame } from "@/lib/stockfish";
 import { getCachedEval, setCachedEval } from "@/lib/eval-cache";
 
-const CACHE_PREFIX = "analysis:";
+// v2: analyses regenerated from white-POV normalized evals.
+const CACHE_PREFIX = "analysis-v2:";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 interface CacheEntry {
@@ -49,12 +50,12 @@ export function useCachedAnalysis(gameUrl: string) {
     }
   }
 
-  async function checkCache(pgn: string) {
+  async function checkCache(pgn: string, username: string, color: "white" | "black") {
     try {
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pgn, username: "_", color: "white", cacheOnly: true }),
+        body: JSON.stringify({ pgn, username, color, cacheOnly: true }),
       });
 
       if (res.status === 204) return;

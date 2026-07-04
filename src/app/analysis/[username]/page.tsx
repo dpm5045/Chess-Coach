@@ -66,7 +66,7 @@ export default function AnalysisPage() {
 
   useEffect(() => {
     if (game && !analysis && !loading) {
-      checkCache(game.pgn);
+      checkCache(game.pgn, username, getPlayerColor(game, username));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game, analysis, loading]);
