@@ -4,9 +4,12 @@ import * as fs from "fs";
 import * as path from "path";
 import Anthropic from "@anthropic-ai/sdk";
 import { getPlayerColor, getPlayerOutcome } from "../src/lib/chess-com";
+import { selectGamesForFilter } from "../src/lib/meta-utils";
+import { META_FILTERS, type MetaFilter } from "../src/lib/types";
 
 const USERS = ["castledoon", "exstrax"];
 const MAX_GAMES = 50;
+const MIN_GAMES_FOR_REPORT = 10;
 const MONTHS_TO_FETCH = 3;
 const FORCE = process.argv.includes("--force");
 const CHESS_COM_API = "https://api.chess.com/pub";
@@ -59,10 +62,10 @@ function analysisCacheKey(pgn: string): string {
   return `analysis:${hash}`;
 }
 
-function metaCacheKey(username: string, gameUuids: string[]): string {
+function metaCacheKey(username: string, gameUuids: string[], filter: MetaFilter): string {
   const sorted = [...gameUuids].sort().join(",");
-  const hash = createHash("sha256").update(sorted).digest("hex").slice(0, 16);
-  return `meta:${username.toLowerCase()}:${hash}`;
+  const hash = createHash("sha256").update(`${sorted}|${filter}`).digest("hex").slice(0, 16);
+  return `meta:${username.toLowerCase()}:${filter}:${hash}`;
 }
 
 
@@ -171,86 +174,99 @@ async function main() {
     const gamesPath = path.join(dataDir, `${username}-games.json`);
     fs.writeFileSync(gamesPath, JSON.stringify(allGames, null, 2));
 
-    const games = allGames
-      .sort((a, b) => b.end_time - a.end_time)
-      .slice(0, MAX_GAMES);
+    for (const filter of META_FILTERS) {
+      const games = selectGamesForFilter(allGames, filter, MAX_GAMES);
+      const label = filter === "all" ? "all time controls" : filter;
 
-    console.log(`  Using ${games.length} most recent games (of ${allGames.length} fetched from last ${MONTHS_TO_FETCH} months)`);
-
-    const uuids = games.map((g) => g.uuid);
-    const key = metaCacheKey(username, uuids);
-
-    // Check if already cached
-    const existing = await redis.get(key);
-    if (existing && !FORCE) {
-      console.log(`  Already cached at ${key} — skipping`);
-      continue;
-    }
-
-    // Build game summary with two-tier approach
-    const sections: string[] = [];
-    let cachedCount = 0;
-
-    for (const game of games) {
-      const color = getPlayerColor(game as never, username);
-      const outcome = getPlayerOutcome(game as never, username);
-      const opp = color === "white" ? game.black : game.white;
-      const playerRating = game[color].rating;
-      const date = formatDate(game.end_time);
-
-      const header = `Game vs ${opp.username} (${opp.rating}) on ${date} | ${color} | ${game.time_class} ${game.time_control} | ${outcome} | Rating: ${playerRating}`;
-
-      // Try to find cached per-game analysis in Redis
-      const analysisKey = analysisCacheKey(game.pgn);
-      const cachedAnalysis = await redis.get<AnalysisResult>(analysisKey);
-
-      if (cachedAnalysis) {
-        cachedCount++;
-        sections.push(`${header}\n  ${summarizeAnalysis(cachedAnalysis)}`);
-      } else {
-        const moves = stripPgnHeaders(game.pgn);
-        sections.push(`${header}\n  Moves: ${moves}`);
+      if (games.length < MIN_GAMES_FOR_REPORT) {
+        console.log(`  [${filter}] Only ${games.length} games — skipping (need ${MIN_GAMES_FOR_REPORT})`);
+        continue;
       }
+
+      console.log(`  [${filter}] Using ${games.length} most recent games (of ${allGames.length} fetched from last ${MONTHS_TO_FETCH} months)`);
+
+      const uuids = games.map((g) => g.uuid);
+      const key = metaCacheKey(username, uuids, filter);
+
+      // Check if already cached
+      const existing = await redis.get(key);
+      if (existing && !FORCE) {
+        console.log(`  [${filter}] Already cached at ${key} — skipping`);
+        continue;
+      }
+
+      // Build game summary with two-tier approach
+      const sections: string[] = [];
+      let cachedCount = 0;
+
+      for (const game of games) {
+        const color = getPlayerColor(game as never, username);
+        const outcome = getPlayerOutcome(game as never, username);
+        const opp = color === "white" ? game.black : game.white;
+        const playerRating = game[color].rating;
+        const date = formatDate(game.end_time);
+
+        const header = `Game vs ${opp.username} (${opp.rating}) on ${date} | ${color} | ${game.time_class} ${game.time_control} | ${outcome} | Rating: ${playerRating}`;
+
+        // Try to find cached per-game analysis in Redis
+        const analysisKey = analysisCacheKey(game.pgn);
+        const cachedAnalysis = await redis.get<AnalysisResult>(analysisKey);
+
+        if (cachedAnalysis) {
+          cachedCount++;
+          sections.push(`${header}\n  ${summarizeAnalysis(cachedAnalysis)}`);
+        } else {
+          const moves = stripPgnHeaders(game.pgn);
+          sections.push(`${header}\n  Moves: ${moves}`);
+        }
+      }
+
+      console.log(`  [${filter}] ${cachedCount}/${games.length} games had cached analyses`);
+
+      const latestColor = getPlayerColor(games[0] as never, username);
+      const currentRating = games[0][latestColor].rating;
+      const gamesSummary = sections.join("\n\n");
+      const filterNote =
+        filter === "all" ? "" : ` All games below are ${filter} games.`;
+
+      console.log(`  [${filter}] Calling Claude for meta analysis (rating ~${currentRating})...`);
+
+      const message = await client.messages.create({
+        // Keep in sync with src/lib/claude.ts (claude-sonnet-4-20250514 was retired 2026-06-15)
+        model: "claude-opus-4-8",
+        max_tokens: 4096,
+        system: META_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: `Analyze the ${label} game history for ${username} (current rating ~${currentRating}, ${games.length} games below).${filterNote} Identify recurring patterns and provide a coaching plan.\n\n${gamesSummary}`,
+          },
+        ],
+      });
+
+      const responseText = message.content[0].type === "text" ? message.content[0].text : "";
+      const jsonStr = extractJson(responseText);
+      const result = JSON.parse(jsonStr);
+
+      // Write to Redis with 14-day TTL (hash-based key for dedup)
+      await redis.set(key, result, { ex: 14 * 24 * 60 * 60 });
+      console.log(`  [${filter}] Cached at ${key}`);
+
+      // Stable per-filter key for the web app to read
+      const latestKey = `meta:${username.toLowerCase()}:${filter}:latest`;
+      await redis.set(latestKey, result);
+      console.log(`  [${filter}] Updated ${latestKey}`);
+
+      // Legacy key kept in sync so older clients still work
+      if (filter === "all") {
+        await redis.set(`meta:${username.toLowerCase()}:latest`, result);
+      }
+
+      // Also save locally for reference
+      const outPath = path.join(dataDir, `${username}-meta-${filter}.json`);
+      fs.writeFileSync(outPath, JSON.stringify(result, null, 2));
+      console.log(`  [${filter}] Saved to ${outPath}`);
     }
-
-    console.log(`  ${cachedCount}/${games.length} games had cached analyses`);
-
-    const latestColor = getPlayerColor(games[0] as never, username);
-    const currentRating = games[0][latestColor].rating;
-    const gamesSummary = sections.join("\n\n");
-
-    console.log(`  Calling Claude for meta analysis (rating ~${currentRating})...`);
-
-    const message = await client.messages.create({
-      // Keep in sync with src/lib/claude.ts (claude-sonnet-4-20250514 was retired 2026-06-15)
-      model: "claude-opus-4-8",
-      max_tokens: 4096,
-      system: META_SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: `Analyze the game history for ${username} (current rating ~${currentRating}, ${games.length} games below). Identify recurring patterns and provide a coaching plan.\n\n${gamesSummary}`,
-        },
-      ],
-    });
-
-    const responseText = message.content[0].type === "text" ? message.content[0].text : "";
-    const jsonStr = extractJson(responseText);
-    const result = JSON.parse(jsonStr);
-
-    // Write to Redis with 14-day TTL (hash-based key for dedup)
-    await redis.set(key, result, { ex: 14 * 24 * 60 * 60 });
-    console.log(`  Cached at ${key}`);
-
-    // Also write to stable "latest" key for the web app to read
-    const latestKey = `meta:${username.toLowerCase()}:latest`;
-    await redis.set(latestKey, result);
-    console.log(`  Updated ${latestKey}`);
-
-    // Also save locally for reference
-    const outPath = path.join(dataDir, `${username}-meta.json`);
-    fs.writeFileSync(outPath, JSON.stringify(result, null, 2));
-    console.log(`  Saved to ${outPath}`);
   }
 
   console.log("\nDone!");
