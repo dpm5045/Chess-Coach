@@ -222,7 +222,8 @@ async function main() {
     console.log(`  Calling Claude for meta analysis (rating ~${currentRating})...`);
 
     const message = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      // Keep in sync with src/lib/claude.ts (claude-sonnet-4-20250514 was retired 2026-06-15)
+      model: "claude-sonnet-4-6",
       max_tokens: 4096,
       system: META_SYSTEM_PROMPT,
       messages: [
