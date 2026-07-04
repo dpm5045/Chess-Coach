@@ -46,3 +46,10 @@ scripts/data/
 .vercel
 .env*.local
 .worktrees/
+
+# local debug/analysis artifacts
+/*.log
+/*.PNG
+/*.png
+/*.html
+.claude/scheduled_tasks.lock

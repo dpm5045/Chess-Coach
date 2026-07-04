@@ -121,6 +121,11 @@ export function AnalysisView({
       <div className="rounded-xl bg-surface-card p-4">
         <h3 className="mb-2 text-sm font-semibold text-gray-400">SUMMARY</h3>
         <p className="text-gray-200">{analysis.summary.overallAssessment}</p>
+        {analysis.source === "batch" && (
+          <p className="mt-2 text-xs text-gray-500">
+            Engine-generated summary — tap Analyze on the game page for full coaching commentary.
+          </p>
+        )}
         <div className="mt-3 rounded-lg bg-accent-blue/10 px-3 py-2">
           <span className="text-xs font-semibold text-accent-blue">
             FOCUS AREA
