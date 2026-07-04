@@ -71,11 +71,13 @@ export const MetaAnalysisResultSchema = z.object({
     asBlack: z.string(),
     recommendation: z.string(),
   }),
-  timeControlInsights: z.object({
-    breakdown: z.string(),
-    comparison: z.string(),
-    recommendation: z.string(),
-  }),
+  timeControlInsights: z
+    .object({
+      breakdown: z.string(),
+      comparison: z.string(),
+      recommendation: z.string(),
+    })
+    .optional(),
   endgameTendency: z.string(),
   coachingPlan: z.array(z.string()),
 });

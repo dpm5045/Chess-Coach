@@ -185,7 +185,7 @@ export interface MetaAnalysisResult {
     asBlack: string;
     recommendation: string;
   };
-  timeControlInsights: {
+  timeControlInsights?: {
     breakdown: string;
     comparison: string;
     recommendation: string;
@@ -197,3 +197,7 @@ export interface MetaAnalysisResult {
 
 /** Current analysis pipeline version. v2 = white-POV normalized evals. */
 export const ANALYSIS_VERSION = 2;
+
+// Meta-analysis time-control filters. "all" includes bullet/daily too.
+export type MetaFilter = "all" | "rapid" | "blitz";
+export const META_FILTERS: MetaFilter[] = ["all", "rapid", "blitz"];
