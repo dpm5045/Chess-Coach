@@ -153,7 +153,7 @@ export async function analyzeGame(
   engineEvals?: EngineAnalysis
 ): Promise<AnalysisResult> {
   const message = await client.messages.create({
-    model: "claude-sonnet-4-6",
+    model: "claude-opus-4-8",
     max_tokens: 2048,
     system: SYSTEM_PROMPT,
     messages: [
@@ -310,7 +310,7 @@ export async function analyzePlayerMeta(
   gamesCount: number
 ): Promise<MetaAnalysisResult> {
   const message = await client.messages.create({
-    model: "claude-sonnet-4-6",
+    model: "claude-opus-4-8",
     max_tokens: 4096,
     system: META_SYSTEM_PROMPT,
     messages: [

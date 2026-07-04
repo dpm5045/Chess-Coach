@@ -223,7 +223,7 @@ async function main() {
 
     const message = await client.messages.create({
       // Keep in sync with src/lib/claude.ts (claude-sonnet-4-20250514 was retired 2026-06-15)
-      model: "claude-sonnet-4-6",
+      model: "claude-opus-4-8",
       max_tokens: 4096,
       system: META_SYSTEM_PROMPT,
       messages: [
